@@ -84,15 +84,20 @@
             <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
                 <i class="fas fa-boxes text-blue-600 mr-2"></i> สต็อกสินค้าปัจจุบัน
             </h2>
+            <div class="relative mb-3">
+                <span class="absolute left-3 top-2.5 text-gray-400"><i class="fas fa-search"></i></span>
+                <input type="text" v-model="searchDashboard" placeholder="ค้นหาสินค้าในสต็อก..." class="w-full border-gray-300 border p-2 pl-9 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
+            </div>
             <div class="bg-white border rounded-lg shadow-sm">
-                <ul class="divide-y max-h-[400px] overflow-y-auto">
-                    <li v-for="product in sortedProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
+                <ul v-if="filteredSortedProducts.length > 0" class="divide-y max-h-[400px] overflow-y-auto">
+                    <li v-for="product in filteredSortedProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
                         <span class="text-gray-700 line-clamp-2 pr-2 leading-tight">{{ product.name }}</span>
                         <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center">
                             {{ product.stock }}
                         </span>
                     </li>
                 </ul>
+                <div v-else class="p-6 text-center text-gray-400 text-sm">ไม่พบสินค้าที่ค้นหา</div>
             </div>
         </div>
 
@@ -110,14 +115,44 @@
             </div>
 
             <div class="space-y-4 bg-white p-4 border rounded-xl shadow-sm">
-                <div>
+                <div class="relative">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">เลือกสินค้า <span class="text-red-500">*</span></label>
-                    <select v-model="form.productId" class="w-full border-gray-300 border p-3 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                        <option value="" disabled>-- ค้นหาและเลือกสินค้า --</option>
-                        <option v-for="product in products" :key="product.id" :value="product.id">
-                            {{ product.name }} (เหลือ: {{ product.stock }})
-                        </option>
-                    </select>
+                    
+                    <!-- Search Input for Product Selection -->
+                    <div class="relative z-40">
+                        <span class="absolute left-3 top-3 text-gray-400"><i class="fas fa-search"></i></span>
+                        <input type="text" 
+                               v-model="searchTransaction" 
+                               @focus="showDropdown = true"
+                               @input="handleSearchInput"
+                               placeholder="พิมพ์ชื่อเพื่อค้นหาและเลือกสินค้า..." 
+                               class="w-full border-gray-300 border p-3 pl-9 pr-10 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        
+                        <!-- Clear Selection Button -->
+                        <button v-if="searchTransaction" @click="clearSelection" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 transition">
+                            <i class="fas fa-times-circle text-lg"></i>
+                        </button>
+                    </div>
+
+                    <!-- Invisible overlay to close dropdown when clicking outside -->
+                    <div v-if="showDropdown" @click="showDropdown = false" class="fixed inset-0 z-30"></div>
+
+                    <!-- Autocomplete Dropdown List -->
+                    <div v-if="showDropdown" class="absolute z-40 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        <ul v-if="filteredTransactionProducts.length > 0">
+                            <li v-for="product in filteredTransactionProducts" 
+                                :key="product.id" 
+                                @click="selectTransactionProduct(product)"
+                                :class="{'bg-blue-50 border-l-4 border-blue-500': form.productId === product.id}"
+                                class="p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer flex justify-between items-center text-sm transition-colors">
+                                <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
+                                <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">เหลือ: {{ product.stock }}</span>
+                            </li>
+                        </ul>
+                        <div v-else class="p-4 text-center text-gray-500 text-sm">
+                            <i class="fas fa-box-open mb-2 text-xl opacity-50 block"></i> ไม่พบสินค้าที่ค้นหา
+                        </div>
+                    </div>
                 </div>
                 
                 <div>
@@ -155,11 +190,15 @@
             </div>
 
             <div class="bg-white border rounded-xl shadow-sm overflow-hidden">
-                <div class="p-3 bg-gray-50 border-b flex justify-between items-center">
+                <div class="p-3 bg-gray-50 border-b flex flex-col gap-3">
                     <span class="text-sm font-bold text-gray-600">รายการสินค้าทั้งหมด ({{ products.length }})</span>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-gray-400"><i class="fas fa-search"></i></span>
+                        <input type="text" v-model="searchManage" placeholder="ค้นหาสินค้าที่ต้องการจัดการ..." class="w-full border-gray-300 border p-2 pl-9 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
+                    </div>
                 </div>
-                <ul class="divide-y max-h-[500px] overflow-y-auto">
-                    <li v-for="product in products" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50">
+                <ul v-if="filteredManageProducts.length > 0" class="divide-y max-h-[500px] overflow-y-auto">
+                    <li v-for="product in filteredManageProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50">
                         <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
                         <button @click="deleteProduct(product.id)" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-md transition" title="ลบสินค้า">
                             <i class="fas fa-trash-alt"></i>
@@ -285,6 +324,10 @@
                     user: ''
                 },
                 newProductName: '',
+                searchDashboard: '',
+                searchTransaction: '',
+                searchManage: '',
+                showDropdown: false,
                 showModal: false,
                 showToast: false,
                 toastMessage: '',
@@ -301,12 +344,52 @@
                     if(b.stock !== a.stock) return b.stock - a.stock;
                     return a.name.localeCompare(b.name, 'th');
                 });
+            },
+            filteredSortedProducts() {
+                if (!this.searchDashboard) return this.sortedProducts;
+                const query = this.searchDashboard.toLowerCase();
+                return this.sortedProducts.filter(p => p.name.toLowerCase().includes(query));
+            },
+            filteredTransactionProducts() {
+                if (!this.searchTransaction) return this.products;
+                const query = this.searchTransaction.toLowerCase();
+                return this.products.filter(p => p.name.toLowerCase().includes(query));
+            },
+            filteredManageProducts() {
+                if (!this.searchManage) return this.products;
+                const query = this.searchManage.toLowerCase();
+                return this.products.filter(p => p.name.toLowerCase().includes(query));
+            }
+        },
+        watch: {
+            activeTab() {
+                // เคลียร์คำค้นหาเมื่อเปลี่ยนหน้า
+                this.searchDashboard = '';
+                this.searchTransaction = '';
+                this.searchManage = '';
+                this.showDropdown = false;
+                this.form.productId = ''; // เคลียร์สินค้าที่เลือกค้างไว้
+                this.form.qty = null;
             }
         },
         mounted() {
             this.loadData();
         },
         methods: {
+            handleSearchInput() {
+                this.showDropdown = true;
+                this.form.productId = ''; // รีเซ็ต ID สินค้าหากผู้ใช้พิมพ์ค้นหาใหม่
+            },
+            selectTransactionProduct(product) {
+                this.form.productId = product.id;
+                this.searchTransaction = product.name;
+                this.showDropdown = false;
+            },
+            clearSelection() {
+                this.form.productId = '';
+                this.searchTransaction = '';
+                this.showDropdown = true;
+            },
             async loadData() {
                 if (!this.isOnline) {
                     this.products = initialProductList.map((name, index) => ({ 
@@ -399,6 +482,7 @@
 
                     this.form.productId = '';
                     this.form.qty = null;
+                    this.searchTransaction = '';
                     this.showModal = false;
                     
                     this.triggerToast('บันทึกรายการสำเร็จแล้ว');
