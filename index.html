@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W5 Warehouse App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        /* Safe area for mobile notch/bottom bar */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</head>
+<body class="text-gray-800">
+
+<div id="app" class="max-w-md mx-auto bg-gray-50 min-h-screen shadow-lg relative pb-20 overflow-x-hidden">
+    
+    <!-- Offline Banner -->
+    <div v-if="!isOnline" class="bg-yellow-100 text-yellow-800 text-xs p-2 text-center border-b border-yellow-200">
+        <i class="fas fa-exclamation-triangle mr-1"></i> โหมดออฟไลน์ (กรุณานำ Web App URL มาใส่ในโค้ดบรรทัดที่ 70)
+    </div>
+
+    <!-- Loading Overlay -->
+    <div v-if="isLoading" class="fixed inset-0 bg-white bg-opacity-80 z-50 flex flex-col items-center justify-center">
+        <i class="fas fa-circle-notch fa-spin text-4xl text-blue-600 mb-3"></i>
+        <p class="text-gray-600 font-semibold text-sm">กำลังซิงค์ข้อมูลกับ Google Sheets...</p>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-blue-700 text-white p-4 sticky top-0 z-10 shadow-md flex justify-center items-center">
+        <h1 class="text-xl font-bold"><i class="fas fa-warehouse mr-2"></i> คลังสินค้า W5</h1>
+    </header>
+
+    <!-- Main Content -->
+    <main class="p-4">
+        
+        <!-- ==================== DASHBOARD ==================== -->
+        <div v-show="activeTab === 'dashboard'" class="animate-fade-in">
+            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
+                <i class="fas fa-chart-line text-blue-600 mr-2"></i> ภาพรวมคลังสินค้า
+            </h2>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
+                    <p class="text-xs text-gray-500 font-semibold mb-1">สินค้าทั้งหมด (รายการ)</p>
+                    <p class="text-2xl font-bold text-gray-800">{{ products.length }}</p>
+                </div>
+                <div class="bg-white border-l-4 border-green-500 p-4 rounded-r-lg shadow-sm">
+                    <p class="text-xs text-gray-500 font-semibold mb-1">ยอดคงเหลือรวม (ชิ้น)</p>
+                    <p class="text-2xl font-bold text-gray-800">{{ totalItemsInStock }}</p>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
+                <i class="fas fa-history text-blue-600 mr-2"></i> รายการเคลื่อนไหวล่าสุด
+            </h2>
+            <div class="bg-white border rounded-lg overflow-hidden shadow-sm mb-6">
+                <ul v-if="history.length > 0" class="divide-y max-h-60 overflow-y-auto">
+                    <li v-for="(log, index) in history.slice().reverse()" :key="index" class="p-3 text-sm flex justify-between items-center hover:bg-gray-50 transition">
+                        <div class="flex-1 pr-2">
+                            <p class="font-semibold text-gray-800 line-clamp-1">{{ log.productName }}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-user-circle text-gray-400 mr-1"></i>{{ log.user }} 
+                                <span class="mx-1 text-gray-300">|</span> 
+                                <i class="far fa-clock text-gray-400 mr-1"></i>{{ log.time }}
+                            </p>
+                        </div>
+                        <div :class="log.type === 'in' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" class="font-bold px-3 py-1 rounded-full text-xs whitespace-nowrap">
+                            <span v-if="log.type === 'in'"><i class="fas fa-arrow-down mr-1"></i>รับ {{ log.qty }}</span>
+                            <span v-else><i class="fas fa-arrow-up mr-1"></i>เบิก {{ log.qty }}</span>
+                        </div>
+                    </li>
+                </ul>
+                <div v-else class="p-8 text-center text-gray-400 flex flex-col items-center">
+                    <i class="fas fa-clipboard-list text-3xl mb-2 opacity-50"></i>
+                    <p class="text-sm">ยังไม่มีการเคลื่อนไหว</p>
+                </div>
+            </div>
+
+            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
+                <i class="fas fa-boxes text-blue-600 mr-2"></i> สต็อกสินค้าปัจจุบัน
+            </h2>
+            <div class="bg-white border rounded-lg shadow-sm">
+                <ul class="divide-y max-h-[400px] overflow-y-auto">
+                    <li v-for="product in sortedProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
+                        <span class="text-gray-700 line-clamp-2 pr-2 leading-tight">{{ product.name }}</span>
+                        <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center">
+                            {{ product.stock }}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ==================== TRANSACTION (เบิก-รับ) ==================== -->
+        <div v-show="activeTab === 'transaction'" class="animate-fade-in">
+            <h2 class="text-lg font-bold mb-4 text-gray-800">ทำรายการ เบิก / รับเข้า</h2>
+            
+            <div class="flex gap-2 mb-5 p-1 bg-gray-200 rounded-lg">
+                <button @click="form.type = 'in'" :class="form.type === 'in' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2.5 rounded-md font-bold text-sm transition-all duration-200 flex justify-center items-center">
+                    <i class="fas fa-arrow-down mr-2"></i> รับเข้า
+                </button>
+                <button @click="form.type = 'out'" :class="form.type === 'out' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'" class="flex-1 py-2.5 rounded-md font-bold text-sm transition-all duration-200 flex justify-center items-center">
+                    <i class="fas fa-arrow-up mr-2"></i> เบิกออก
+                </button>
+            </div>
+
+            <div class="space-y-4 bg-white p-4 border rounded-xl shadow-sm">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">เลือกสินค้า <span class="text-red-500">*</span></label>
+                    <select v-model="form.productId" class="w-full border-gray-300 border p-3 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <option value="" disabled>-- ค้นหาและเลือกสินค้า --</option>
+                        <option v-for="product in products" :key="product.id" :value="product.id">
+                            {{ product.name }} (เหลือ: {{ product.stock }})
+                        </option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">จำนวน <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <input type="number" v-model.number="form.qty" min="1" class="w-full border-gray-300 border p-3 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุตัวเลข...">
+                        <span class="absolute right-4 top-3 text-gray-400 text-sm">ชิ้น</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อพนักงานผู้ทำรายการ <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-3 text-gray-400"><i class="fas fa-user"></i></span>
+                        <input type="text" v-model="form.user" class="w-full border-gray-300 border p-3 pl-9 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุชื่อของคุณ...">
+                    </div>
+                </div>
+
+                <button @click="verifyTransaction" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-lg mt-6 shadow-md transition-colors flex justify-center items-center text-sm">
+                    <i class="fas fa-check-circle mr-2"></i> ตรวจสอบและบันทึก
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== MANAGE PRODUCTS ==================== -->
+        <div v-show="activeTab === 'manage'" class="animate-fade-in">
+            <h2 class="text-lg font-bold mb-4 text-gray-800">จัดการรายการสินค้า</h2>
+            
+            <div class="bg-white p-4 border rounded-xl shadow-sm mb-5">
+                <h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-plus-circle text-green-500 mr-1"></i> เพิ่มสินค้าใหม่</h3>
+                <div class="flex gap-2">
+                    <input type="text" v-model="newProductName" class="flex-1 border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="ชื่อสินค้าใหม่ เช่น กล่องกระดาษ M...">
+                    <button @click="addProduct" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition">เพิ่ม</button>
+                </div>
+            </div>
+
+            <div class="bg-white border rounded-xl shadow-sm overflow-hidden">
+                <div class="p-3 bg-gray-50 border-b flex justify-between items-center">
+                    <span class="text-sm font-bold text-gray-600">รายการสินค้าทั้งหมด ({{ products.length }})</span>
+                </div>
+                <ul class="divide-y max-h-[500px] overflow-y-auto">
+                    <li v-for="product in products" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50">
+                        <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
+                        <button @click="deleteProduct(product.id)" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-md transition" title="ลบสินค้า">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 w-full max-w-md bg-white border-t flex justify-around text-xs text-gray-500 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
+        <button @click="activeTab = 'dashboard'" :class="{'text-blue-700 font-bold': activeTab === 'dashboard'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+            <i class="fas fa-chart-pie text-xl"></i> แดชบอร์ด
+            <div v-if="activeTab === 'dashboard'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
+        </button>
+        <button @click="activeTab = 'transaction'" :class="{'text-blue-700 font-bold': activeTab === 'transaction'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+            <i class="fas fa-exchange-alt text-xl"></i> เบิก-รับ
+            <div v-if="activeTab === 'transaction'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
+        </button>
+        <button @click="activeTab = 'manage'" :class="{'text-blue-700 font-bold': activeTab === 'manage'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+            <i class="fas fa-box-open text-xl"></i> จัดการสินค้า
+            <div v-if="activeTab === 'manage'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
+        </button>
+    </nav>
+
+    <!-- Confirmation Modal Popup -->
+    <transition name="fade">
+        <div v-if="showModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50 pb-20">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl transform transition-all">
+                <div class="text-center mb-4">
+                    <div :class="form.type === 'in' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+                        <i :class="form.type === 'in' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'" class="text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800">ยืนยันทำรายการ</h3>
+                    <p class="text-sm text-gray-500 mt-1">กรุณาตรวจสอบข้อมูลก่อนบันทึก</p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100 space-y-3">
+                    <div class="flex justify-between items-start border-b border-gray-200 pb-2">
+                        <span class="text-xs text-gray-500 mt-0.5">ประเภท:</span> 
+                        <span :class="form.type === 'in' ? 'text-green-600 bg-green-50 border-green-200' : 'text-red-600 bg-red-50 border-red-200'" class="font-bold text-sm px-2 py-0.5 rounded border">
+                            {{ form.type === 'in' ? 'รับเข้าคลัง (+)' : 'เบิกออกจากคลัง (-)' }}
+                        </span>
+                    </div>
+                    <div>
+                        <span class="text-xs text-gray-500 block mb-1">สินค้า:</span> 
+                        <span class="font-bold text-gray-800 text-sm leading-tight block">{{ getSelectedProductName() }}</span>
+                    </div>
+                    <div class="flex justify-between items-end border-b border-gray-200 pb-2 pt-1">
+                        <span class="text-xs text-gray-500">จำนวน:</span> 
+                        <span class="font-bold text-xl text-blue-700">{{ form.qty }} <span class="text-sm font-normal text-gray-600">ชิ้น</span></span>
+                    </div>
+                    <div class="flex justify-between items-center pt-1">
+                        <span class="text-xs text-gray-500">ผู้ทำรายการ:</span> 
+                        <span class="font-semibold text-gray-800 text-sm"><i class="fas fa-user-circle mr-1 text-gray-400"></i>{{ form.user }}</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button @click="showModal = false" class="flex-1 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-3 rounded-xl transition text-sm">
+                        แก้ไขข้อมูล
+                    </button>
+                    <button @click="confirmTransaction" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200 font-bold py-3 rounded-xl transition text-sm">
+                        ยืนยันบันทึก
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
+    
+    <!-- Toast Notification (Success) -->
+    <transition name="fade">
+        <div v-if="showToast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50 text-sm font-semibold flex items-center">
+            <i class="fas fa-check-circle text-green-400 mr-2 text-lg"></i> {{ toastMessage }}
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp } = Vue;
+
+    // === URL ของ Google Web App ที่เชื่อมต่อกับ Sheet "W5" ===
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec"; 
+    // ==========================================
+
+    // ข้อมูลเริ่มต้นเผื่อกรณีเปิดแบบ Offline
+    const initialProductList = [
+        "^Z/S) ถ้วยทาร์ตโปรตุเกส โอคุน #206 (ลัง11x60x9.5g)", "^Z/ครีมเมอร์ Rich's กล่องฟ้า (ลัง24x454g)", "^Z/ถ้วยทาร์ตโปรตุเกส โอคุน #207 (ลัง10x40x20g)",
+        "^Z/น้ำทาร์ต พรีมีโอ ทาร์ตฟิลลิ่ง (ลัง12x907g)", "^Z/บลูเบอร์รี่ แช่แข็ง ถุงเปลือย (ลัง10x1kg)", "^Z/มอสเซเรล่าชีส แบบขูด Valla (ลัง12x1kg)",
+        "^Z/วิปปิ้ง วิปอีโค่ EcoWhip RICH (ลัง12x907g)", "^Z/วิปปิ้งครีม Rich's โกลด์ (ลัง12x907g)", "^Z/วิปปิ้งครีม Rich's ซันวิป (ลัง12x1kg)",
+        "^Z/วิปปิ้งครีม Rich's เบเกอรี่ท็อปปิ้ง[ฟ้า] (ลัง12x1kg)", "^Z/วิปปิ้งครีม ไชน์โร้ด Gold กล่องฟ้า (ลัง12x1kg)", "^Z/วิปปิ้งครีม ท้อปปิ้ง Rich's แวลู (ลัง12x1kg)",
+        "^Z/วิปปิ้งครีม ลายวัว มิลค์ ท็อปปิ้ง Niagara (ลัง12x907g)", "^Z/วิปปิ้งครีม วีโว่ (ลัง12x1.1kg)", "^Z/วิปปิ้งครีม สำหรับขนมปัง Rich's Avoset (ลัง12x1kg)",
+        "^Z/สตรอเบอร์รี่ แช่แข็ง Castella เกรดA (ลัง10x1kg)", "Y/L)แป้ง โก๋ ฉลาม (กระสอบ 30kg)", "Y/L)แป้ง ข้าวโพด ProCorn (กระสอบ 25kg)",
+        "Y/L)แป้ง ดาวฟ้า (กระสอบ5x5kg)", "Y/S)แป้ง ว่าว (กระสอบ 22.5kg)", "Y/ข]เนยเทียม เซสท์ ขาว ตัก (ลัง15kg)", "Y/เบกกิ้งโซดา (กระสอบ25kg)",
+        "Y/ย]เนยเทียม หยก เหลือง ตัก (ลัง15kg)", "Y/ล]เนยเทียม เซสท์ เหลือง ตัก (ลัง15kg)", "Y/สารกันบูด แบบเนื้อทราย Purox's (กระสอบ25kg)",
+        "Y/สารกันบูด แบบผงละเอียด (กระสอบ25kg)", "Y/หัวนมผง 'ฉลาม' สำหรับเบเกอร์รี่ (กระสอบ25kg)", "Z/F]เนยทอด ฟราย ฟราย (ลัง15x1kg)",
+        "Z/L)แป้ง ข้าวโพด ProCorn (ลัง10x1kg)", "Z/L)ผงฟู ดับเบิ้ลแอ้ดชั่น เบสท์โอเดอร์ @1kg (ลัง12x1kg)", "Z/S)ผงฟูซอง ซิงเกิลแอ้คชั่น เบสท์โอเดอร์",
+        "Z/เกล็ดขนมปัง ซุปเปอร์ไฟน์ (ลัง10x1kg)", "Z/ครีมเทียม คอฟฟี่ ดรีมเมอร์ Dreamer (แดง) (ลัง12x1kg)", "Z/นมข้นจืด พาเลซ แดง (ถาด48กป.)",
+        "Z/น้ำตาลเบเกอร์รี่ Caster มิตรผล (ลัง24x1kg)", "Z/น้ำตาลไอซิ่ง มิตรผล (ลัง12x900g)", "Z/แป้ง ดาวฟ้า (ลัง10x1kg)",
+        "Z/แป้ง มันสำปะหลัง ปลาไทย (กระสอบ40x500g)", "Z/แป้ง ห่าน-หงส์ (ลัง10x1kg)", "Z/ผงโกโก้ สีเข้ม CocoaRich (ลัง24x500g)",
+        "Z/ผงคัสตาร์ด Royal (ลัง24x300g)", "Z/หัวนมผง 'ฉลาม' สำหรับเบเกอร์รี่ (ลัง25x1kg)", "Z/หัวนมผงนิวซีแลนด์ แท้100% Dairy-Rich (ลัง12x1kg)",
+        "กิเลนแดง (กระสอบ 22.5kg)", "กิเลนเหลือง (กระสอบ 22.5kg)", "ข้าวเจ้า หมีคู่ดาว (กระสอบ 10x1kg)", "ครีมเทียม คอฟฟี่ ดรีมมี่ Dreamy (ฟ้า) (ลัง12x1kg)",
+        "ซอสพริก โรซ่า (ลัง12x1kg)", "ซอสมะเขือเทศ โรซ่า (ลัง12x1kg)", "ถ้วยฟอยล์ พร้อมอบ Star *แยกฝา* (ลัง12x50pcs) - 3282G(3007)",
+        "ถุงตรานกแก้ว 10x15", "นมข้นจืด ฟอลค่อน Extra เอ้กตร้า (ลัง12x1kg)", "นมข้นจืดกล่อง พาเลซ แดง (ลัง12x1L)",
+        "นมข้นหวาน ซันเบิร์ด (ลัง8x2kg)", "นมข้นหวาน พาเลซ กระป๋อง (ถาด48x350g)", "นมข้นหวานถุง พาเลซ (ลัง8x2kg)",
+        "น้ำตาลทราย คาราเมล มิตรผลโกลด์ (ลัง20x1kg)", "น้ำตาลทรายแดง เบเกอร์รี่ มิตรผล (ลัง20x1kg)", "แป้ง ว่าว (ลัง10x1kg)",
+        "ห่าน(กระสอบ 22.5kg)", "กิเลนเหลือง (ลัง10x1kg)", "เนยเทียม ป๊อบ แพ็ค (ลัง15x1kg)"
+    ];
+
+    createApp({
+        data() {
+            return {
+                activeTab: 'dashboard',
+                products: [], // จะถูกโหลดจาก Google Sheets
+                history: [],
+                form: {
+                    type: 'in',
+                    productId: '',
+                    qty: null,
+                    user: ''
+                },
+                newProductName: '',
+                showModal: false,
+                showToast: false,
+                toastMessage: '',
+                isLoading: false,
+                isOnline: WEB_APP_URL.trim() !== ''
+            }
+        },
+        computed: {
+            totalItemsInStock() {
+                return this.products.reduce((sum, p) => sum + p.stock, 0);
+            },
+            sortedProducts() {
+                return [...this.products].sort((a, b) => {
+                    if(b.stock !== a.stock) return b.stock - a.stock;
+                    return a.name.localeCompare(b.name, 'th');
+                });
+            }
+        },
+        mounted() {
+            this.loadData();
+        },
+        methods: {
+            async loadData() {
+                if (!this.isOnline) {
+                    this.products = initialProductList.map((name, index) => ({ 
+                        id: index + 1, name: name, stock: 0 
+                    })).sort((a,b) => a.name.localeCompare(b.name, 'th'));
+                    return;
+                }
+                
+                this.isLoading = true;
+                try {
+                    const response = await fetch(WEB_APP_URL + '?action=getData');
+                    const data = await response.json();
+                    if (data.products) this.products = data.products.sort((a,b) => a.name.localeCompare(b.name, 'th'));
+                    if (data.history) this.history = data.history;
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    this.triggerToast('ไม่สามารถโหลดข้อมูลจาก Sheets ได้', true);
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            async apiCall(payload) {
+                if (!this.isOnline) return true;
+                
+                this.isLoading = true;
+                try {
+                    const response = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    return result.success;
+                } catch (error) {
+                    console.error('API Error:', error);
+                    this.triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', true);
+                    return false;
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            verifyTransaction() {
+                if (!this.form.productId) {
+                    this.triggerToast('กรุณาเลือกสินค้า', true);
+                    return;
+                }
+                if (!this.form.qty || this.form.qty <= 0) {
+                    this.triggerToast('กรุณาระบุจำนวนชิ้นที่ถูกต้อง', true);
+                    return;
+                }
+                if (!this.form.user.trim()) {
+                    this.triggerToast('กรุณาระบุชื่อพนักงาน', true);
+                    return;
+                }
+                
+                const product = this.products.find(p => p.id === this.form.productId);
+                if (this.form.type === 'out' && product.stock < this.form.qty) {
+                    this.triggerToast('สินค้าคงเหลือไม่เพียงพอ!', true);
+                    return;
+                }
+
+                this.showModal = true;
+            },
+            async confirmTransaction() {
+                const product = this.products.find(p => p.id === this.form.productId);
+                const qty = parseInt(this.form.qty);
+                const timeStr = new Date().toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
+                
+                const success = await this.apiCall({
+                    action: 'transaction',
+                    productId: product.id,
+                    productName: product.name,
+                    type: this.form.type,
+                    qty: qty,
+                    user: this.form.user.trim(),
+                    time: timeStr
+                });
+
+                if (success) {
+                    if (this.form.type === 'in') product.stock += qty;
+                    else product.stock -= qty;
+
+                    this.history.push({
+                        type: this.form.type,
+                        productName: product.name,
+                        qty: qty,
+                        user: this.form.user.trim(),
+                        time: timeStr
+                    });
+
+                    this.form.productId = '';
+                    this.form.qty = null;
+                    this.showModal = false;
+                    
+                    this.triggerToast('บันทึกรายการสำเร็จแล้ว');
+                    this.activeTab = 'dashboard';
+                    window.scrollTo(0, 0);
+                }
+            },
+            getSelectedProductName() {
+                if(!this.form.productId) return '';
+                return this.products.find(p => p.id === this.form.productId).name;
+            },
+            async addProduct() {
+                if(!this.newProductName.trim()) {
+                    this.triggerToast('กรุณาระบุชื่อสินค้า', true);
+                    return;
+                }
+                const newId = this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) + 1 : 1;
+                const newProduct = {
+                    id: newId,
+                    name: this.newProductName.trim(),
+                    stock: 0
+                };
+
+                const success = await this.apiCall({
+                    action: 'addProduct',
+                    product: newProduct
+                });
+
+                if (success) {
+                    this.products.unshift(newProduct);
+                    this.newProductName = '';
+                    this.triggerToast('เพิ่มสินค้าใหม่เรียบร้อย');
+                }
+            },
+            async deleteProduct(id) {
+                if(confirm('ยืนยันการลบสินค้ารายการนี้ออกจากคลัง?')) {
+                    const success = await this.apiCall({
+                        action: 'deleteProduct',
+                        productId: id
+                    });
+
+                    if (success) {
+                        this.products = this.products.filter(p => p.id !== id);
+                        this.triggerToast('ลบสินค้าสำเร็จ');
+                    }
+                }
+            },
+            triggerToast(msg, isError = false) {
+                if(isError) {
+                    alert(msg);
+                } else {
+                    this.toastMessage = msg;
+                    this.showToast = true;
+                    setTimeout(() => {
+                        this.showToast = false;
+                    }, 2500);
+                }
+            }
+        }
+    }).mount('#app')
+</script>
+</body>
+</html>
