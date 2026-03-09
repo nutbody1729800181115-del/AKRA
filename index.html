@@ -66,7 +66,7 @@
                             <p class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-user-circle text-gray-400 mr-1"></i>{{ log.user }} 
                                 <span class="mx-1 text-gray-300">|</span> 
-                                <i class="far fa-clock text-gray-400 mr-1"></i>{{ log.time }}
+                                <i class="far fa-clock text-gray-400 mr-1"></i>{{ formatDate(log.time) }}
                             </p>
                         </div>
                         <div :class="log.type === 'in' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" class="font-bold px-3 py-1 rounded-full text-xs whitespace-nowrap">
@@ -377,6 +377,27 @@
             this.loadData();
         },
         methods: {
+            formatDate(dateString) {
+                if (!dateString) return '';
+                try {
+                    const date = new Date(dateString);
+                    // หากแปลงเป็นรูปแบบเวลาไม่ได้ (เช่นข้อมูลเก่า) ให้แสดงค่าเดิม
+                    if (isNaN(date.getTime())) return dateString; 
+                    
+                    // แปลงเป็น วัน/เดือน/ปี - เวลา (บังคับโซนไทยเสมอ)
+                    return date.toLocaleString('en-GB', { 
+                        timeZone: 'Asia/Bangkok',
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        hour12: false
+                    }).replace(', ', ' - ');
+                } catch (e) {
+                    return dateString;
+                }
+            },
             handleSearchInput() {
                 this.showDropdown = true;
                 this.form.productId = ''; // รีเซ็ต ID สินค้าหากผู้ใช้พิมพ์ค้นหาใหม่
@@ -458,16 +479,8 @@
                 const product = this.products.find(p => p.id === this.form.productId);
                 const qty = parseInt(this.form.qty);
                 
-                // บังคับสร้าง วันที่/เวลา เป็นโซนประเทศไทย (GMT+7) เสมอ 
-                const timeStr = new Date().toLocaleString('en-GB', { 
-                    timeZone: 'Asia/Bangkok',
-                    day: '2-digit', 
-                    month: '2-digit', 
-                    year: '2-digit',
-                    hour: '2-digit', 
-                    minute: '2-digit',
-                    hour12: false
-                }).replace(',', ''); // จะได้รูปแบบเช่น "08/03/26 11:30"
+                // ใช้ค่าเวลาสากลส่งไปบันทึก เพื่อให้ Google Sheets เก็บเป็น Date Format ที่สมบูรณ์
+                const timeStr = new Date().toISOString(); 
                 
                 const success = await this.apiCall({
                     action: 'transaction',
