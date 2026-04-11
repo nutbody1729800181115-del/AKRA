@@ -14,48 +14,41 @@
         .fade-enter-from, .fade-leave-to { opacity: 0; }
         /* Safe area for mobile notch/bottom bar */
         .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
     </style>
 </head>
 <body class="text-gray-800">
 
 <!-- ================= SYSTEM AUTH & LOG SCRIPT ================= -->
 <script>
-    // 1. ตั้งค่าชื่อแอปพลิเคชันนี้
     const CURRENT_APP_NAME = "AKRA W5"; 
-    
-    // URL ของ Google Apps Script (ตัวเดียวกับหน้า Main)
-    const GOOGLE_APP_SCRIPT_URL_MAIN = "https://script.google.com/macros/s/AKfycbw5PCJ1OlxCQR6zaNubrmZTgaORB-rJK2Ow5_YC3i5kKv-BrrTgJkTJyNZKrzfodK1m/exec";
+    const GOOGLE_APP_SCRIPT_URL_MAIN = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec";
 
-    // 2. ดึงชื่อผู้ใช้จาก URL (ที่หน้า Main ส่งมาให้)
     const urlParams = new URLSearchParams(window.location.search);
     let currentUser = urlParams.get('user');
 
     if (currentUser) {
-        // ถ้ามีชื่อส่งมา ให้จำค่าไว้ใน sessionStorage (เผื่อผู้ใช้กด Refresh หน้าเว็บ จะได้ไม่หลุด)
         sessionStorage.setItem('active_user', currentUser);
-        
-        // ลบ ?user=... ออกจาก URL เพื่อให้ URL ดูสะอาดตา (Optional)
         window.history.replaceState({}, document.title, window.location.pathname);
     } else {
-        // ถ้าไม่มีใน URL ให้ลองหาในสิ่งที่จำไว้
         currentUser = sessionStorage.getItem('active_user');
     }
 
-    // 3. ระบบรักษาความปลอดภัย: ถ้าไม่มีชื่อผู้ใช้เลย แปลว่าแอบเข้าลิงก์ตรงๆ ไม่ผ่านหน้า Main
     if (!currentUser) {
-        // ป้องกัน Error ตอนพรีวิวโค้ดในระบบ แต่ของจริงจะเด้งกลับไปหน้า Main
         if (window.self !== window.top) {
             currentUser = "Tester (โหมดจำลอง)"; 
         } else {
-            alert("กรุณาเข้าสู่ระบบผ่านหน้า Main ก่อนใช้งานครับ");
-            // เด้งกลับไปหน้า Main ทันที
+            // Changed from alert to soft redirect or placeholder
+            console.warn("ไม่พบผู้ใช้งาน กำลังกลับไปหน้าเข้าสู่ระบบ");
             window.location.href = "https://akra-web.github.io/Main/"; 
         }
-    } else {
-        console.log("ยินดีต้อนรับคุณ: " + currentUser);
     }
 
-    // 4. ฟังก์ชันสำหรับบันทึก Log การทำงานในแอปนี้
     window.sendAppLog = function(action, details) {
         const payload = {
             user: currentUser,
@@ -80,7 +73,7 @@
     
     <!-- Offline Banner -->
     <div v-if="!isOnline" class="bg-yellow-100 text-yellow-800 text-xs p-2 text-center border-b border-yellow-200">
-        <i class="fas fa-exclamation-triangle mr-1"></i> โหมดออฟไลน์ (กรุณานำ Web App URL มาใส่ในโค้ดบรรทัดที่ 70)
+        <i class="fas fa-exclamation-triangle mr-1"></i> โหมดออฟไลน์ (กรุณานำ Web App URL มาใส่ในโค้ดบรรทัดที่ 390)
     </div>
 
     <!-- Loading Overlay -->
@@ -94,7 +87,7 @@
         <h1 class="text-xl font-bold"><i class="fas fa-warehouse mr-2"></i> คลังสินค้า W5</h1>
         <div class="text-xs bg-blue-800 px-3 py-1.5 rounded-full flex items-center shadow-inner">
             <i class="fas fa-user-circle mr-1.5 text-blue-300 text-sm"></i>
-            <span id="showUserName" class="font-semibold">{{ loggedInUser }}</span>
+            <span class="font-semibold">{{ loggedInUser }}</span>
         </div>
     </header>
 
@@ -117,9 +110,15 @@
                 </div>
             </div>
 
-            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
-                <i class="fas fa-history text-blue-600 mr-2"></i> รายการเคลื่อนไหวล่าสุด
-            </h2>
+            <div class="flex justify-between items-end mb-3">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-history text-blue-600 mr-2"></i> รายการเคลื่อนไหวล่าสุด
+                </h2>
+                <button @click="exportHistoryToCSV" class="text-xs text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center transition">
+                    <i class="fas fa-download mr-1"></i> ดาวน์โหลด
+                </button>
+            </div>
+            
             <div class="bg-white border rounded-lg overflow-hidden shadow-sm mb-6">
                 <ul v-if="history.length > 0" class="divide-y max-h-60 overflow-y-auto">
                     <li v-for="(log, index) in reversedHistory" :key="index" class="p-3 text-sm flex justify-between items-center hover:bg-gray-50 transition">
@@ -128,7 +127,9 @@
                             <p class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-user-circle text-gray-400 mr-1"></i>{{ log.user }} 
                                 <span class="mx-1 text-gray-300">|</span> 
-                                <i class="far fa-clock text-gray-400 mr-1"></i>{{ formatDate(log.time) }}
+                                <i class="far fa-clock text-gray-400 mr-1"></i>
+                                <span v-if="log.time">{{ formatDisplayDate(log.date) }} - {{ formatDisplayTime(log.time) }}</span>
+                                <span v-else>{{ formatDate(log.date) }}</span>
                             </p>
                         </div>
                         <div class="flex items-center gap-2">
@@ -136,8 +137,7 @@
                                 <span v-if="log.type === 'in'"><i class="fas fa-arrow-down mr-1"></i>รับ {{ log.qty }}</span>
                                 <span v-else><i class="fas fa-arrow-up mr-1"></i>เบิก {{ log.qty }}</span>
                             </div>
-                            <!-- ปุ่มยกเลิกรายการ (แสดงเฉพาะรายการปกติ) -->
-                            <button v-if="!log.productName.includes('[ยกเลิก]')" @click="undoTransaction(log)" class="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ยกเลิกรายการนี้ (คืนยอดสต็อก)">
+                            <button v-if="!log.productName.includes('[ยกเลิก]')" @click="confirmUndo(log)" class="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ยกเลิกรายการนี้ (คืนยอดสต็อก)">
                                 <i class="fas fa-undo"></i>
                             </button>
                         </div>
@@ -164,7 +164,6 @@
                             <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center shadow-sm">
                                 {{ product.stock }}
                             </span>
-                            <!-- ปุ่มคีย์ลัดเบิกสินค้าด่วน -->
                             <button @click="quickWithdraw(product)" class="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-800 px-2 py-1.5 rounded-md border border-red-100 transition shadow-sm flex items-center gap-1" title="เบิกสินค้านี้ด่วน">
                                 <i class="fas fa-arrow-up text-[10px]"></i> <span class="font-bold text-xs">เบิก</span>
                             </button>
@@ -192,27 +191,23 @@
                 <div class="relative">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">เลือกสินค้า <span class="text-red-500">*</span></label>
                     
-                    <!-- Search Input for Product Selection -->
-                    <div class="relative z-40">
+                    <div class="relative z-30">
                         <span class="absolute left-3 top-3 text-gray-400"><i class="fas fa-search"></i></span>
                         <input type="text" 
                                v-model="searchTransaction" 
                                @focus="showDropdown = true"
                                @input="handleSearchInput"
-                               placeholder="พิมพ์ชื่อเพื่อค้นหาและเลือกสินค้า..." 
+                               placeholder="พิมพ์ชื่อเพื่อค้นหา..." 
                                class="w-full border-gray-300 border p-3 pl-9 pr-10 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
                         
-                        <!-- Clear Selection Button -->
                         <button v-if="searchTransaction" @click="clearSelection" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 transition">
                             <i class="fas fa-times-circle text-lg"></i>
                         </button>
                     </div>
 
-                    <!-- Invisible overlay to close dropdown when clicking outside -->
-                    <div v-if="showDropdown" @click="showDropdown = false" class="fixed inset-0 z-30"></div>
+                    <div v-if="showDropdown" @click="showDropdown = false" class="fixed inset-0 z-20"></div>
 
-                    <!-- Autocomplete Dropdown List -->
-                    <div v-if="showDropdown" class="absolute z-40 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    <div v-if="showDropdown" class="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                         <ul v-if="filteredTransactionProducts.length > 0">
                             <li v-for="product in filteredTransactionProducts" 
                                 :key="product.id" 
@@ -223,9 +218,7 @@
                                 <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">เหลือ: {{ product.stock }}</span>
                             </li>
                         </ul>
-                        <div v-else class="p-4 text-center text-gray-500 text-sm">
-                            <i class="fas fa-box-open mb-2 text-xl opacity-50 block"></i> ไม่พบสินค้าที่ค้นหา
-                        </div>
+                        <div v-else class="p-4 text-center text-gray-500 text-sm">ไม่พบสินค้าที่ค้นหา</div>
                     </div>
                 </div>
                 
@@ -238,7 +231,6 @@
                 </div>
 
                 <div>
-                    <!-- อัปเดตให้ดึงชื่อจากระบบมาใส่ และป้องกันการแก้ไข -->
                     <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อพนักงานผู้ทำรายการ <span class="text-red-500">*</span></label>
                     <div class="relative">
                         <span class="absolute left-3 top-3 text-gray-500"><i class="fas fa-user-check"></i></span>
@@ -259,7 +251,7 @@
             <div class="bg-white p-4 border rounded-xl shadow-sm mb-5">
                 <h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-plus-circle text-green-500 mr-1"></i> เพิ่มสินค้าใหม่</h3>
                 <div class="flex gap-2">
-                    <input type="text" v-model="newProductName" class="flex-1 border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="ชื่อสินค้าใหม่ เช่น กล่องกระดาษ M...">
+                    <input type="text" v-model="newProductName" @keyup.enter="addProduct" class="flex-1 border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="ชื่อสินค้าใหม่...">
                     <button @click="addProduct" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition">เพิ่ม</button>
                 </div>
             </div>
@@ -275,18 +267,24 @@
                 <ul v-if="filteredManageProducts.length > 0" class="divide-y max-h-[500px] overflow-y-auto">
                     <li v-for="product in filteredManageProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50">
                         <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
-                        <button @click="deleteProduct(product.id)" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-md transition" title="ลบสินค้า">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
+                        <div class="flex gap-1 ml-2">
+                            <button @click="openEditModal(product)" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-md transition" title="แก้ไขชื่อ">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button @click="confirmDelete(product)" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-md transition" title="ลบสินค้า">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
                     </li>
                 </ul>
+                <div v-else class="p-6 text-center text-gray-400 text-sm">ไม่พบสินค้า</div>
             </div>
         </div>
 
     </main>
 
     <!-- Bottom Navigation -->
-    <nav class="fixed bottom-0 w-full max-w-md bg-white border-t flex justify-around text-xs text-gray-500 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-20">
+    <nav class="fixed bottom-0 w-full max-w-md bg-white border-t flex justify-around text-xs text-gray-500 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-10">
         <button @click="activeTab = 'dashboard'" :class="{'text-blue-700 font-bold': activeTab === 'dashboard'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
             <i class="fas fa-chart-pie text-xl"></i> แดชบอร์ด
             <div v-if="activeTab === 'dashboard'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
@@ -301,9 +299,73 @@
         </button>
     </nav>
 
-    <!-- Confirmation Modal Popup -->
+    <!-- Global Error/Info Message Modal -->
     <transition name="fade">
-        <div v-if="showModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50 pb-20">
+        <div v-if="messageBox.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+            <div class="bg-white rounded-xl p-5 w-full max-w-[300px] shadow-2xl transform transition-all text-center">
+                <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" :class="messageBox.isError ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-500'">
+                    <i class="fas text-2xl" :class="messageBox.isError ? 'fa-times' : 'fa-info'"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-2">{{ messageBox.title }}</h3>
+                <p class="text-sm text-gray-600 mb-5">{{ messageBox.message }}</p>
+                <button @click="messageBox.show = false" class="w-full font-bold py-2.5 rounded-lg transition text-sm" :class="messageBox.isError ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-blue-600 text-white hover:bg-blue-700'">
+                    ตกลง
+                </button>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Universal Action Confirmation Modal (replaces browser confirm) -->
+    <transition name="fade">
+        <div v-if="confirmDialog.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
+            <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl transform transition-all">
+                <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
+                    <i class="mr-2" :class="confirmDialog.iconClass"></i> {{ confirmDialog.title }}
+                </h3>
+                <p class="text-sm text-gray-600 mb-6 whitespace-pre-line">{{ confirmDialog.message }}</p>
+                
+                <div class="flex gap-3">
+                    <button @click="confirmDialog.show = false" :disabled="isSubmitting" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50">
+                        ยกเลิก
+                    </button>
+                    <button @click="executeConfirmDialog" :disabled="isSubmitting" class="flex-1 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center disabled:opacity-50" :class="confirmDialog.btnClass">
+                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i>
+                        <span>ยืนยัน</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Edit Product Modal -->
+    <transition name="fade">
+        <div v-if="editModal.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
+            <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-edit text-blue-500 mr-2"></i> แก้ไขชื่อสินค้า</h3>
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">ชื่อเดิม</label>
+                    <div class="p-2.5 bg-gray-100 rounded border text-sm text-gray-600 line-clamp-2">{{ editModal.oldName }}</div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">ชื่อใหม่ <span class="text-red-500">*</span></label>
+                    <input type="text" v-model="editModal.newName" @keyup.enter="saveEditProduct" class="w-full border-gray-300 border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ระบุชื่อใหม่...">
+                </div>
+                <div class="flex gap-3">
+                    <button @click="editModal.show = false" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm">
+                        ยกเลิก
+                    </button>
+                    <button @click="saveEditProduct" :disabled="isSubmitting" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center">
+                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i>
+                        บันทึก
+                    </button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Transaction Confirmation Modal Popup -->
+    <transition name="fade">
+        <div v-if="showModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55] pb-20">
             <div class="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl transform transition-all">
                 <div class="text-center mb-4">
                     <div :class="form.type === 'in' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -349,7 +411,7 @@
     
     <!-- Toast Notification (Success) -->
     <transition name="fade">
-        <div v-if="showToast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50 text-sm font-semibold flex items-center">
+        <div v-if="showToast" class="fixed top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-[70] text-sm font-semibold flex items-center whitespace-nowrap">
             <i class="fas fa-check-circle text-green-400 mr-2 text-lg"></i> {{ toastMessage }}
         </div>
     </transition>
@@ -359,37 +421,14 @@
 <script>
     const { createApp } = Vue;
 
-    // === URL ของ Google Web App ที่เชื่อมต่อกับ Sheet "W5" (คนละอันกับระบบ Main) ===
+    // === URL ของ Google Web App ที่เชื่อมต่อกับ Sheet "W5" ===
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec"; 
     // ==========================================
-
-    const initialProductList = [
-        "^Z/S) ถ้วยทาร์ตโปรตุเกส โอคุน #206 (ลัง11x60x9.5g)", "^Z/ครีมเมอร์ Rich's กล่องฟ้า (ลัง24x454g)", "^Z/ถ้วยทาร์ตโปรตุเกส โอคุน #207 (ลัง10x40x20g)",
-        "^Z/น้ำทาร์ต พรีมีโอ ทาร์ตฟิลลิ่ง (ลัง12x907g)", "^Z/บลูเบอร์รี่ แช่แข็ง ถุงเปลือย (ลัง10x1kg)", "^Z/มอสเซเรล่าชีส แบบขูด Valla (ลัง12x1kg)",
-        "^Z/วิปปิ้ง วิปอีโค่ EcoWhip RICH (ลัง12x907g)", "^Z/วิปปิ้งครีม Rich's โกลด์ (ลัง12x907g)", "^Z/วิปปิ้งครีม Rich's ซันวิป (ลัง12x1kg)",
-        "^Z/วิปปิ้งครีม Rich's เบเกอรี่ท็อปปิ้ง[ฟ้า] (ลัง12x1kg)", "^Z/วิปปิ้งครีม ไชน์โร้ด Gold กล่องฟ้า (ลัง12x1kg)", "^Z/วิปปิ้งครีม ท้อปปิ้ง Rich's แวลู (ลัง12x1kg)",
-        "^Z/วิปปิ้งครีม ลายวัว มิลค์ ท็อปปิ้ง Niagara (ลัง12x907g)", "^Z/วิปปิ้งครีม วีโว่ (ลัง12x1.1kg)", "^Z/วิปปิ้งครีม สำหรับขนมปัง Rich's Avoset (ลัง12x1kg)",
-        "^Z/สตรอเบอร์รี่ แช่แข็ง Castella เกรดA (ลัง10x1kg)", "Y/L)แป้ง โก๋ ฉลาม (กระสอบ 30kg)", "Y/L)แป้ง ข้าวโพด ProCorn (กระสอบ 25kg)",
-        "Y/L)แป้ง ดาวฟ้า (กระสอบ5x5kg)", "Y/S)แป้ง ว่าว (กระสอบ 22.5kg)", "Y/ข]เนยเทียม เซสท์ ขาว ตัก (ลัง15kg)", "Y/เบกกิ้งโซดา (กระสอบ25kg)",
-        "Y/ย]เนยเทียม หยก เหลือง ตัก (ลัง15kg)", "Y/ล]เนยเทียม เซสท์ เหลือง ตัก (ลัง15kg)", "Y/สารกันบูด แบบเนื้อทราย Purox's (กระสอบ25kg)",
-        "Y/สารกันบูด แบบผงละเอียด (กระสอบ25kg)", "Y/หัวนมผง 'ฉลาม' สำหรับเบเกอร์รี่ (กระสอบ25kg)", "Z/F]เนยทอด ฟราย ฟราย (ลัง15x1kg)",
-        "Z/L)แป้ง ข้าวโพด ProCorn (ลัง10x1kg)", "Z/L)ผงฟู ดับเบิ้ลแอ้ดชั่น เบสท์โอเดอร์ @1kg (ลัง12x1kg)", "Z/S)ผงฟูซอง ซิงเกิลแอ้คชั่น เบสท์โอเดอร์",
-        "Z/เกล็ดขนมปัง ซุปเปอร์ไฟน์ (ลัง10x1kg)", "Z/ครีมเทียม คอฟฟี่ ดรีมเมอร์ Dreamer (แดง) (ลัง12x1kg)", "Z/นมข้นจืด พาเลซ แดง (ถาด48กป.)",
-        "Z/น้ำตาลเบเกอร์รี่ Caster มิตรผล (ลัง24x1kg)", "Z/น้ำตาลไอซิ่ง มิตรผล (ลัง12x900g)", "Z/แป้ง ดาวฟ้า (ลัง10x1kg)",
-        "Z/แป้ง มันสำปะหลัง ปลาไทย (กระสอบ40x500g)", "Z/แป้ง ห่าน-หงส์ (ลัง10x1kg)", "Z/ผงโกโก้ สีเข้ม CocoaRich (ลัง24x500g)",
-        "Z/ผงคัสตาร์ด Royal (ลัง24x300g)", "Z/หัวนมผง 'ฉลาม' สำหรับเบเกอร์รี่ (ลัง25x1kg)", "Z/หัวนมผงนิวซีแลนด์ แท้100% Dairy-Rich (ลัง12x1kg)",
-        "กิเลนแดง (กระสอบ 22.5kg)", "กิเลนเหลือง (กระสอบ 22.5kg)", "ข้าวเจ้า หมีคู่ดาว (กระสอบ 10x1kg)", "ครีมเทียม คอฟฟี่ ดรีมมี่ Dreamy (ฟ้า) (ลัง12x1kg)",
-        "ซอสพริก โรซ่า (ลัง12x1kg)", "ซอสมะเขือเทศ โรซ่า (ลัง12x1kg)", "ถ้วยฟอยล์ พร้อมอบ Star *แยกฝา* (ลัง12x50pcs) - 3282G(3007)",
-        "ถุงตรานกแก้ว 10x15", "นมข้นจืด ฟอลค่อน Extra เอ้กตร้า (ลัง12x1kg)", "นมข้นจืดกล่อง พาเลซ แดง (ลัง12x1L)",
-        "นมข้นหวาน ซันเบิร์ด (ลัง8x2kg)", "นมข้นหวาน พาเลซ กระป๋อง (ถาด48x350g)", "นมข้นหวานถุง พาเลซ (ลัง8x2kg)",
-        "น้ำตาลทราย คาราเมล มิตรผลโกลด์ (ลัง20x1kg)", "น้ำตาลทรายแดง เบเกอร์รี่ มิตรผล (ลัง20x1kg)", "แป้ง ว่าว (ลัง10x1kg)",
-        "ห่าน(กระสอบ 22.5kg)", "กิเลนเหลือง (ลัง10x1kg)", "เนยเทียม ป๊อบ แพ็ค (ลัง15x1kg)"
-    ];
 
     createApp({
         data() {
             return {
-                loggedInUser: currentUser || 'Guest', // ดึงข้อมูลผู้ใช้จาก Script ด้านบน
+                loggedInUser: currentUser || 'Guest',
                 activeTab: 'dashboard',
                 products: [], 
                 history: [],
@@ -397,7 +436,7 @@
                     type: 'out',
                     productId: '',
                     qty: null,
-                    user: currentUser || '' // ใส่ชื่อลงในฟอร์มเบิก-รับอัตโนมัติ
+                    user: currentUser || ''
                 },
                 newProductName: '',
                 searchDashboard: '',
@@ -408,13 +447,19 @@
                 showToast: false,
                 toastMessage: '',
                 isLoading: false,
-                isSubmitting: false, // ป้องกันการกดเบิ้ล
-                isOnline: WEB_APP_URL.trim() !== ''
+                isSubmitting: false,
+                isOnline: WEB_APP_URL.trim() !== '',
+                
+                // ระบบแจ้งเตือนใหม่แทน Alert / Confirm
+                messageBox: { show: false, title: '', message: '', isError: false },
+                confirmDialog: { show: false, title: '', message: '', iconClass: '', btnClass: '', action: null, payload: null },
+                
+                // ข้อมูลสำหรับ Modal แก้ไขชื่อสินค้า
+                editModal: { show: false, id: null, oldName: '', newName: '' }
             }
         },
         computed: {
             reversedHistory() {
-                // แสดงประวัติล่าสุดขึ้นก่อน
                 return [...this.history].reverse();
             },
             totalItemsInStock() {
@@ -457,6 +502,44 @@
             this.loadData();
         },
         methods: {
+            // ----- UI Helpers -----
+            showAlert(title, message, isError = true) {
+                this.messageBox = { show: true, title, message, isError };
+            },
+            showConfirmUI(title, message, btnClass, iconClass, actionFn, payload) {
+                this.confirmDialog = { show: true, title, message, btnClass, iconClass, action: actionFn, payload };
+            },
+            async executeConfirmDialog() {
+                if(this.confirmDialog.action) {
+                    await this.confirmDialog.action(this.confirmDialog.payload);
+                }
+                this.confirmDialog.show = false;
+            },
+            triggerToast(msg) {
+                this.toastMessage = msg;
+                this.showToast = true;
+                setTimeout(() => { this.showToast = false; }, 3000);
+            },
+
+            // ----- Utilities -----
+            formatDisplayDate(val) {
+                if (!val) return '';
+                if (String(val).includes('/')) return val; // กรณีเป็นรูปแบบ DD/MM/YY มาแล้ว
+                try {
+                    const d = new Date(val);
+                    if (isNaN(d.getTime())) return val;
+                    return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
+                } catch (e) { return val; }
+            },
+            formatDisplayTime(val) {
+                if (!val) return '';
+                if (String(val).includes(':') && String(val).length <= 8) return val; // กรณีเป็นรูปแบบ HH:mm:ss มาแล้ว
+                try {
+                    const d = new Date(val);
+                    if (isNaN(d.getTime())) return val;
+                    return d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                } catch (e) { return val; }
+            },
             formatDate(dateString) {
                 if (!dateString) return '';
                 try {
@@ -464,17 +547,54 @@
                     if (isNaN(date.getTime())) return dateString; 
                     return date.toLocaleString('en-GB', { 
                         timeZone: 'Asia/Bangkok',
-                        day: '2-digit', 
-                        month: '2-digit', 
-                        year: 'numeric',
-                        hour: '2-digit', 
-                        minute: '2-digit',
-                        hour12: false
+                        day: '2-digit', month: '2-digit', year: '2-digit',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
                     }).replace(', ', ' - ');
-                } catch (e) {
-                    return dateString;
-                }
+                } catch (e) { return dateString; }
             },
+            exportHistoryToCSV() {
+                if(this.history.length === 0) {
+                    this.showAlert('แจ้งเตือน', 'ไม่มีข้อมูลประวัติให้ดาวน์โหลด', false);
+                    return;
+                }
+                
+                // สร้าง Header
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // \uFEFF สำหรับรองรับภาษาไทยใน Excel
+                csvContent += "วันที่,เวลา,ประเภท,ชื่อสินค้า,จำนวน,ผู้ทำรายการ\n";
+
+                // จัดข้อมูลแต่ละแถว
+                this.history.forEach(row => {
+                    const typeLabel = row.type === 'in' ? 'รับเข้า' : 'เบิกออก';
+                    // ครอบด้วย "" ป้องกันลูกน้ำในชื่อสินค้าทำให้คอลัมน์เพี้ยน
+                    const safeName = `"${row.productName.replace(/"/g, '""')}"`;
+                    
+                    let fDate = '';
+                    let fTime = '';
+                    
+                    if (row.time) {
+                        fDate = this.formatDisplayDate(row.date);
+                        fTime = this.formatDisplayTime(row.time);
+                    } else {
+                        const formattedDate = this.formatDate(row.date);
+                        const parts = formattedDate.split(' - ');
+                        fDate = parts[0] || '';
+                        fTime = parts[1] || '';
+                    }
+
+                    csvContent += `${fDate},${fTime},${typeLabel},${safeName},${row.qty},${row.user}\n`;
+                });
+
+                // สั่งดาวน์โหลด
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `W5_History_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            // ----- Transactions -----
             handleSearchInput() {
                 this.showDropdown = true;
                 this.form.productId = ''; 
@@ -490,25 +610,18 @@
                 this.showDropdown = true;
             },
             quickWithdraw(product) {
-                // 1. สลับไปหน้าทำรายการก่อน เพื่อให้ระบบเคลียร์ฟอร์มเก่าทิ้ง
                 this.activeTab = 'transaction'; 
-                
-                // 2. หน่วงเวลาเสี้ยววินาที เพื่อกรอกข้อมูลสินค้าลงไปใหม่หลังเคลียร์ฟอร์มเสร็จ
                 setTimeout(() => {
-                    this.form.type = 'out'; // ตั้งค่าเป็นเบิกออก
-                    this.form.productId = product.id; // เลือกสินค้าให้ทันที
-                    this.searchTransaction = product.name; // ใส่ชื่อลงในช่องค้นหา
-                    window.scrollTo({ top: 0, behavior: 'smooth' }); // เลื่อนจอขึ้นด้านบน
+                    this.form.type = 'out';
+                    this.form.productId = product.id;
+                    this.searchTransaction = product.name;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 }, 50);
             },
+            
+            // ----- Core API Calls -----
             async loadData() {
-                if (!this.isOnline) {
-                    this.products = initialProductList.map((name, index) => ({ 
-                        id: index + 1, name: name, stock: 0 
-                    })).sort((a,b) => a.name.localeCompare(b.name, 'th'));
-                    return;
-                }
-                
+                if (!this.isOnline) return;
                 this.isLoading = true;
                 try {
                     const response = await fetch(WEB_APP_URL + '?action=getData');
@@ -516,15 +629,13 @@
                     if (data.products) this.products = data.products.sort((a,b) => a.name.localeCompare(b.name, 'th'));
                     if (data.history) this.history = data.history;
                 } catch (error) {
-                    console.error('Error loading data:', error);
-                    this.triggerToast('ไม่สามารถโหลดข้อมูลจาก Sheets ได้', true);
+                    this.showAlert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลจากระบบได้ โปรดลองรีเฟรชหน้าเว็บ', true);
                 } finally {
                     this.isLoading = false;
                 }
             },
             async apiCall(payload) {
                 if (!this.isOnline) return true;
-                
                 this.isLoading = true;
                 try {
                     const response = await fetch(WEB_APP_URL, {
@@ -535,43 +646,38 @@
                     const result = await response.json();
                     return result.success;
                 } catch (error) {
-                    console.error('API Error:', error);
-                    this.triggerToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', true);
+                    this.showAlert('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', true);
                     return false;
                 } finally {
                     this.isLoading = false;
                 }
             },
+
+            // ----- Action Methods -----
             verifyTransaction() {
-                if (this.isSubmitting) return; // ป้องกันการกดเบิ้ล
-                if (!this.form.productId) {
-                    this.triggerToast('กรุณาเลือกสินค้า', true);
-                    return;
-                }
-                if (!this.form.qty || this.form.qty <= 0) {
-                    this.triggerToast('กรุณาระบุจำนวนชิ้นที่ถูกต้อง', true);
-                    return;
-                }
-                if (!this.form.user.trim()) {
-                    this.triggerToast('กรุณาระบุชื่อพนักงาน', true);
-                    return;
-                }
+                if (this.isSubmitting) return;
+                if (!this.form.productId) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาเลือกสินค้าจากรายการ'); return; }
+                if (!this.form.qty || this.form.qty <= 0) { this.showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุจำนวนชิ้นให้ถูกต้อง'); return; }
+                if (!this.form.user.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'ระบบไม่พบชื่อผู้ทำรายการ'); return; }
                 
                 const product = this.products.find(p => p.id === this.form.productId);
                 if (this.form.type === 'out' && product.stock < this.form.qty) {
-                    this.triggerToast('สินค้าคงเหลือไม่เพียงพอ!', true);
+                    this.showAlert('สต็อกไม่พอ!', `ยอดคงเหลือของ ${product.name} มีเพียง ${product.stock} ชิ้น ไม่พอสำหรับการเบิก`);
                     return;
                 }
-
                 this.showModal = true;
             },
             async confirmTransaction() {
-                if (this.isSubmitting) return; // ป้องกันการกดยืนยันเบิ้ล
+                if (this.isSubmitting) return;
                 this.isSubmitting = true;
 
                 const product = this.products.find(p => p.id === this.form.productId);
                 const qty = parseInt(this.form.qty);
-                const timeStr = new Date().toISOString(); 
+                
+                // สร้างวันที่และเวลาจำลองเพื่อแสดงผลในหน้าเว็บทันที
+                const now = new Date();
+                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
+                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                 
                 const success = await this.apiCall({
                     action: 'transaction',
@@ -579,8 +685,7 @@
                     productName: product.name,
                     type: this.form.type,
                     qty: qty,
-                    user: this.form.user.trim(),
-                    time: timeStr
+                    user: this.form.user.trim()
                 });
 
                 if (success) {
@@ -588,18 +693,16 @@
                     else product.stock -= qty;
 
                     this.history.push({
+                        date: uiDate,
+                        time: uiTime,
                         type: this.form.type,
                         productName: product.name,
                         qty: qty,
-                        user: this.form.user.trim(),
-                        time: timeStr
+                        user: this.form.user.trim()
                     });
 
-                    // 5. บันทึก Log การเบิก/รับ ผ่านระบบ Main (ถ้ามีฟังก์ชัน sendAppLog)
                     const actionName = this.form.type === 'in' ? 'รับเข้า' : 'เบิกออก';
-                    if (window.sendAppLog) {
-                        window.sendAppLog(`ทำรายการ${actionName} W5`, `${product.name} จำนวน ${qty} ชิ้น`);
-                    }
+                    if (window.sendAppLog) window.sendAppLog(`ทำรายการ${actionName} W5`, `${product.name} จำนวน ${qty} ชิ้น`);
 
                     this.form.productId = '';
                     this.form.qty = null;
@@ -612,26 +715,32 @@
                 }
                 this.isSubmitting = false;
             },
-            async undoTransaction(log) {
+
+            confirmUndo(log) {
                 const actionName = log.type === 'in' ? 'รับเข้า' : 'เบิกออก';
-                if(!confirm(`ต้องการยกเลิกรายการ "${actionName} ${log.productName} จำนวน ${log.qty} ชิ้น" ใช่หรือไม่?\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`)) return;
-
-                if (this.isSubmitting) return;
+                this.showConfirmUI(
+                    'ยืนยันการยกเลิกรายการ', 
+                    `ต้องการยกเลิกรายการนี้ใช่หรือไม่?\n\n"${actionName} ${log.productName} \nจำนวน ${log.qty} ชิ้น"\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`,
+                    'bg-red-600 hover:bg-red-700', 'fas fa-exclamation-triangle text-red-500', 
+                    this.processUndo, log
+                );
+            },
+            async processUndo(log) {
                 this.isSubmitting = true;
-
-                // หาสินค้าจากชื่อในกรณีที่ประวัติไม่มี ID
                 let baseProductName = log.productName.replace(' [ยกเลิก]', ''); 
                 const product = this.products.find(p => p.name === baseProductName);
                 
                 if (!product) {
-                    this.triggerToast('ไม่พบข้อมูลสินค้านี้ในระบบ ไม่สามารถคืนยอดได้', true);
+                    this.showAlert('ข้อผิดพลาด', 'ไม่พบข้อมูลสินค้านี้ในระบบแล้ว ไม่สามารถคืนยอดได้', true);
                     this.isSubmitting = false;
                     return;
                 }
 
-                // สลับประเภทรายการเพื่อคืนยอดกลับ (เช่น ถ้าเบิกออก ก็เปลี่ยนเป็นรับเข้าเพื่อชดเชย)
                 const reverseType = log.type === 'in' ? 'out' : 'in';
-                const timeStr = new Date().toISOString(); 
+                
+                const now = new Date();
+                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
+                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
                 const success = await this.apiCall({
                     action: 'transaction',
@@ -639,91 +748,98 @@
                     productName: product.name + ' [ยกเลิก]',
                     type: reverseType,
                     qty: log.qty,
-                    user: this.loggedInUser,
-                    time: timeStr
+                    user: this.loggedInUser
                 });
 
                 if (success) {
-                    // อัปเดตสต็อกในหน้าเว็บ
                     if (reverseType === 'in') product.stock += log.qty;
                     else product.stock -= log.qty;
 
-                    // บันทึกประวัติการยกเลิก
-                    this.history.push({
-                        type: reverseType,
-                        productName: product.name + ' [ยกเลิก]',
-                        qty: log.qty,
-                        user: this.loggedInUser,
-                        time: timeStr
-                    });
+                    this.history.push({ type: reverseType, productName: product.name + ' [ยกเลิก]', qty: log.qty, user: this.loggedInUser, date: uiDate, time: uiTime });
 
-                    if (window.sendAppLog) {
-                        window.sendAppLog(`ยกเลิกรายการ${actionName} W5`, `คืนยอด ${product.name} จำนวน ${log.qty} ชิ้น`);
-                    }
+                    const actionName = log.type === 'in' ? 'รับเข้า' : 'เบิกออก';
+                    if (window.sendAppLog) window.sendAppLog(`ยกเลิกรายการ${actionName} W5`, `คืนยอด ${product.name} จำนวน ${log.qty} ชิ้น`);
 
                     this.triggerToast('ยกเลิกรายการและคืนยอดสำเร็จ');
                 }
                 this.isSubmitting = false;
             },
+
             getSelectedProductName() {
                 if(!this.form.productId) return '';
                 return this.products.find(p => p.id === this.form.productId).name;
             },
+
             async addProduct() {
                 if(!this.newProductName.trim()) {
-                    this.triggerToast('กรุณาระบุชื่อสินค้า', true);
+                    this.showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อสินค้าที่ต้องการเพิ่ม');
                     return;
                 }
                 const newId = this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) + 1 : 1;
-                const newProduct = {
-                    id: newId,
-                    name: this.newProductName.trim(),
-                    stock: 0
-                };
+                const newProduct = { id: newId, name: this.newProductName.trim(), stock: 0 };
 
-                const success = await this.apiCall({
-                    action: 'addProduct',
-                    product: newProduct
-                });
+                const success = await this.apiCall({ action: 'addProduct', product: newProduct });
 
                 if (success) {
                     this.products.unshift(newProduct);
-                    
-                    // บันทึก Log การเพิ่มสินค้าใหม่
                     if (window.sendAppLog) window.sendAppLog('เพิ่มสินค้าใหม่', `เพิ่ม ${this.newProductName.trim()} เข้าคลัง W5`);
-
                     this.newProductName = '';
                     this.triggerToast('เพิ่มสินค้าใหม่เรียบร้อย');
                 }
             },
-            async deleteProduct(id) {
-                const productToDelete = this.products.find(p => p.id === id);
-                if(confirm(`ยืนยันการลบ ${productToDelete.name} ออกจากคลัง?`)) {
-                    const success = await this.apiCall({
-                        action: 'deleteProduct',
-                        productId: id
-                    });
 
-                    if (success) {
-                        this.products = this.products.filter(p => p.id !== id);
-                        
-                        // บันทึก Log การลบสินค้า
-                        if (window.sendAppLog) window.sendAppLog('ลบสินค้า', `ลบ ${productToDelete.name} ออกจากคลัง W5`);
-
-                        this.triggerToast('ลบสินค้าสำเร็จ');
-                    }
-                }
+            openEditModal(product) {
+                this.editModal = { show: true, id: product.id, oldName: product.name, newName: product.name };
             },
-            triggerToast(msg, isError = false) {
-                if(isError) {
-                    alert(msg);
-                } else {
-                    this.toastMessage = msg;
-                    this.showToast = true;
-                    setTimeout(() => {
-                        this.showToast = false;
-                    }, 2500);
+            async saveEditProduct() {
+                if (!this.editModal.newName.trim()) {
+                    this.showAlert('ข้อมูลไม่ครบ', 'ชื่อสินค้าต้องไม่เป็นค่าว่าง');
+                    return;
                 }
+                if (this.editModal.newName === this.editModal.oldName) {
+                    this.editModal.show = false;
+                    return;
+                }
+
+                this.isSubmitting = true;
+                const success = await this.apiCall({
+                    action: 'editProduct',
+                    productId: this.editModal.id,
+                    newName: this.editModal.newName.trim()
+                });
+
+                if (success) {
+                    const product = this.products.find(p => p.id === this.editModal.id);
+                    if (product) product.name = this.editModal.newName.trim();
+                    
+                    if (window.sendAppLog) window.sendAppLog('แก้ไขชื่อสินค้า', `เปลี่ยนจาก ${this.editModal.oldName} เป็น ${this.editModal.newName}`);
+                    
+                    this.triggerToast('อัปเดตชื่อสินค้าสำเร็จ');
+                    this.editModal.show = false;
+                }
+                this.isSubmitting = false;
+            },
+
+            confirmDelete(product) {
+                this.showConfirmUI(
+                    'ยืนยันลบสินค้า', 
+                    `คุณแน่ใจหรือไม่ที่จะลบสินค้าต่อไปนี้?\n\n"${product.name}"\n\nการลบสินค้าจะทำให้ไม่สามารถทำรายการเบิก-รับสินค้านี้ได้อีก`,
+                    'bg-red-600 hover:bg-red-700', 'fas fa-trash-alt text-red-500', 
+                    this.processDelete, product.id
+                );
+            },
+            async processDelete(id) {
+                this.isSubmitting = true;
+                const productToDelete = this.products.find(p => p.id === id);
+                
+                const success = await this.apiCall({ action: 'deleteProduct', productId: id });
+
+                if (success) {
+                    this.products = this.products.filter(p => p.id !== id);
+                    if (window.sendAppLog) window.sendAppLog('ลบสินค้า', `ลบ ${productToDelete.name} ออกจากคลัง W5`);
+                    this.triggerToast('ลบสินค้าสำเร็จ');
+                }
+                this.isSubmitting = false;
             }
         }
     }).mount('#app')
