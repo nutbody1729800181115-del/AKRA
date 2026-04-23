@@ -88,7 +88,7 @@
                     <p class="text-2xl font-bold text-gray-800">{{ products.length }}</p>
                 </div>
                 <div class="bg-white border-l-4 border-green-500 p-4 rounded-r-lg shadow-sm">
-                    <p class="text-xs text-gray-500 font-semibold mb-1">ยอดคงเหลือรวม (ชิ้น)</p>
+                    <p class="text-xs text-gray-500 font-semibold mb-1">ยอดคงเหลือรวม</p>
                     <p class="text-2xl font-bold text-gray-800">{{ totalItemsInStock }}</p>
                 </div>
             </div>
@@ -145,7 +145,7 @@
                         <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
                         <div class="flex items-center gap-2">
                             <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center shadow-sm">
-                                {{ product.stock }}
+                                {{ product.stock }} <span class="font-normal text-xs">{{ product.unit || 'ชิ้น' }}</span>
                             </span>
                             <button @click="quickWithdraw(product)" class="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-800 px-2 py-1.5 rounded-md border border-red-100 transition shadow-sm flex items-center gap-1">
                                 <i class="fas fa-arrow-up text-[10px]"></i> <span class="font-bold text-xs">เบิก</span>
@@ -175,7 +175,7 @@
                         <div class="flex justify-between items-end border-t border-gray-100 pt-3">
                             <div class="text-sm">
                                 <span class="text-gray-500">จำนวนที่ขอ: </span>
-                                <span class="font-bold text-orange-600 text-lg">{{ item.qty }}</span> <span class="text-gray-500 text-xs">ชิ้น</span>
+                                <span class="font-bold text-orange-600 text-lg">{{ item.qty }}</span> <span class="text-gray-500 text-xs">{{ getProductUnit(item.productId) }}</span>
                             </div>
                             <div class="flex gap-2">
                                 <button @click="confirmRemovePickList(item)" class="text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-lg transition text-xs font-bold border border-gray-200">
@@ -239,7 +239,7 @@
                                 :class="{'bg-blue-50 border-l-4 border-blue-500': form.productId === product.id}"
                                 class="p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer flex justify-between items-center text-sm transition-colors">
                                 <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
-                                <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">เหลือ: {{ product.stock }}</span>
+                                <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">เหลือ: {{ product.stock }} {{ product.unit || 'ชิ้น' }}</span>
                             </li>
                         </ul>
                         <div v-else class="p-4 text-center text-gray-500 text-sm">ไม่พบสินค้าที่ค้นหา</div>
@@ -250,7 +250,7 @@
                     <label class="block text-sm font-semibold text-gray-700 mb-1">จำนวน <span class="text-red-500">*</span></label>
                     <div class="relative">
                         <input type="number" v-model.number="form.qty" min="1" class="w-full border-gray-300 border p-3 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="ระบุตัวเลข...">
-                        <span class="absolute right-4 top-3 text-gray-400 text-sm">ชิ้น</span>
+                        <span class="absolute right-4 top-3 text-gray-400 text-sm">{{ getSelectedProductUnit() }}</span>
                     </div>
                 </div>
 
@@ -274,15 +274,16 @@
             </div>
         </div>
 
-        <!-- ==================== MANAGE PRODUCTS ==================== -->
-        <div v-show="activeTab === 'manage'" class="animate-fade-in">
+        <!-- ==================== MANAGE PRODUCTS (เฉพาะ ADMIN) ==================== -->
+        <div v-if="isAdmin" v-show="activeTab === 'manage'" class="animate-fade-in">
             <h2 class="text-lg font-bold mb-4 text-gray-800">จัดการรายการสินค้า</h2>
             
             <div class="bg-white p-4 border rounded-xl shadow-sm mb-5">
                 <h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-plus-circle text-green-500 mr-1"></i> เพิ่มสินค้าใหม่</h3>
                 <div class="flex gap-2">
-                    <input type="text" v-model="newProductName" @keyup.enter="addProduct" class="flex-1 border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="ชื่อสินค้าใหม่...">
-                    <button @click="addProduct" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition">เพิ่ม</button>
+                    <input type="text" v-model="newProductName" class="flex-[2] border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="ชื่อสินค้าใหม่...">
+                    <input type="text" v-model="newProductUnit" @keyup.enter="addProduct" class="flex-[1] border-gray-300 border p-2.5 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="หน่วย..">
+                    <button @click="addProduct" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition">เพิ่ม</button>
                 </div>
             </div>
 
@@ -332,7 +333,7 @@
             <i class="fas fa-exchange-alt text-[20px]"></i> เบิก-รับ
             <div v-if="activeTab === 'transaction'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
         </button>
-        <button @click="activeTab = 'manage'" :class="{'text-blue-700 font-bold': activeTab === 'manage'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+        <button v-if="isAdmin" @click="activeTab = 'manage'" :class="{'text-blue-700 font-bold': activeTab === 'manage'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
             <i class="fas fa-box-open text-[20px]"></i> จัดการ
             <div v-if="activeTab === 'manage'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
         </button>
@@ -351,7 +352,7 @@
                 <div class="bg-gray-50 p-3 rounded-lg border mb-4">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-semibold text-gray-500">จำนวนที่ขอเบิก:</span>
-                        <span class="text-sm font-bold text-gray-700">{{ pickModal.item ? pickModal.item.qty : 0 }} ชิ้น</span>
+                        <span class="text-sm font-bold text-gray-700">{{ pickModal.item ? pickModal.item.qty : 0 }} {{ pickModal.item ? getProductUnit(pickModal.item.productId) : '' }}</span>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">จำนวนที่หยิบได้จริง <span class="text-orange-500">*</span></label>
@@ -454,7 +455,7 @@
                     </div>
                     <div class="flex justify-between items-end border-b border-gray-200 pb-2 pt-1">
                         <span class="text-xs text-gray-500">จำนวน:</span> 
-                        <span class="font-bold text-xl text-blue-700">{{ form.qty }} <span class="text-sm font-normal text-gray-600">ชิ้น</span></span>
+                        <span class="font-bold text-xl text-blue-700">{{ form.qty }} <span class="text-sm font-normal text-gray-600">{{ getSelectedProductUnit() }}</span></span>
                     </div>
                     <div class="flex justify-between items-center pt-1">
                         <span class="text-xs text-gray-500">ผู้ทำรายการ:</span> 
@@ -489,10 +490,16 @@
         data() {
             return {
                 loggedInUser: currentUser || 'Guest',
+                
+                // --- ตั้งค่ารายชื่อ Admin ตรงนี้ (พิมพ์ชื่อให้ตรงกับระบบ Login) ---
+                adminList: ['ชื่อหัวหน้า1', 'ชื่อหัวหน้า2', 'Admin', 'Tester (โหมดจำลอง)'],
+                isAdmin: false, 
+                // --------------------------------------------------------
+
                 activeTab: 'dashboard',
                 products: [], 
                 history: [],
-                pickList: [], // อาร์เรย์สำหรับเก็บใบจัดสินค้า
+                pickList: [], 
                 form: {
                     type: 'out',
                     productId: '',
@@ -500,6 +507,7 @@
                     user: currentUser || ''
                 },
                 newProductName: '',
+                newProductUnit: 'ชิ้น', // ค่าเริ่มต้นสำหรับเพิ่มหน่วย
                 searchDashboard: '',
                 searchTransaction: '',
                 searchManage: '',
@@ -556,9 +564,23 @@
             }
         },
         mounted() {
+            // เช็คสิทธิ์ว่าเป็น Admin หรือไม่ตอนเปิดหน้าเว็บ
+            if (this.adminList.includes(this.loggedInUser)) {
+                this.isAdmin = true;
+            }
+
             this.loadData();
         },
         methods: {
+            getProductUnit(id) {
+                const p = this.products.find(p => p.id === id);
+                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
+            },
+            getProductUnitByName(name) {
+                const baseName = name.replace(' [ยกเลิก]', '');
+                const p = this.products.find(p => p.name === baseName);
+                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
+            },
             showAlert(title, message, isError = true) { this.messageBox = { show: true, title, message, isError }; },
             showConfirmUI(title, message, btnClass, iconClass, actionFn, payload) {
                 this.confirmDialog = { show: true, title, message, btnClass, iconClass, action: actionFn, payload };
@@ -661,7 +683,7 @@
                 
                 const product = this.products.find(p => p.id === this.form.productId);
                 if (this.form.type === 'out' && product.stock < this.form.qty) {
-                    this.showAlert('สต็อกไม่พอ!', `ยอดคงเหลือของ ${product.name} มีเพียง ${product.stock} ชิ้น ไม่พอสำหรับการเบิก`); return;
+                    this.showAlert('สต็อกไม่พอ!', `ยอดคงเหลือของ ${product.name} มีเพียง ${product.stock} ${product.unit || 'ชิ้น'} ไม่พอสำหรับการเบิก`); return;
                 }
                 this.showModal = true;
             },
@@ -678,7 +700,7 @@
                 if (success) {
                     if (this.form.type === 'in') product.stock += qty; else product.stock -= qty;
                     this.history.push({ date: uiDate, time: uiTime, type: this.form.type, productName: product.name, qty: qty, user: this.form.user.trim() });
-                    if (window.sendAppLog) window.sendAppLog(`ทำรายการ${this.form.type === 'in' ? 'รับเข้า' : 'เบิกออก'} W5`, `${product.name} จำนวน ${qty} ชิ้น`);
+                    if (window.sendAppLog) window.sendAppLog(`ทำรายการ${this.form.type === 'in' ? 'รับเข้า' : 'เบิกออก'} W5`, `${product.name} จำนวน ${qty} ${product.unit || 'ชิ้น'}`);
                     this.form.productId = ''; this.form.qty = null; this.searchTransaction = ''; this.showModal = false;
                     this.triggerToast('บันทึกรายการสำเร็จแล้ว'); this.activeTab = 'dashboard'; window.scrollTo(0, 0);
                 }
@@ -695,7 +717,7 @@
                 if (product.stock < this.form.qty) {
                     this.showConfirmUI(
                         'แจ้งเตือน: สต็อกอาจไม่พอ', 
-                        `สินค้า ${product.name} มีคงเหลือ ${product.stock} ชิ้น\nซึ่งน้อยกว่าที่คุณกำลังสั่งเบิก (${this.form.qty} ชิ้น)\n\nต้องการเพิ่มลงใบจัดต่อไปหรือไม่?`,
+                        `สินค้า ${product.name} มีคงเหลือ ${product.stock} ${product.unit || 'ชิ้น'}\nซึ่งน้อยกว่าที่คุณกำลังสั่งเบิก (${this.form.qty} ${product.unit || 'ชิ้น'})\n\nต้องการเพิ่มลงใบจัดต่อไปหรือไม่?`,
                         'bg-orange-500 hover:bg-orange-600', 'fas fa-exclamation-circle text-orange-500',
                         this.processAddPickList, product
                     );
@@ -719,7 +741,7 @@
                 const success = await this.apiCall({ action: 'addPickList', ...newItem });
                 if(success) {
                     this.pickList.push(newItem);
-                    if (window.sendAppLog) window.sendAppLog('สร้างใบจัด W5', `รอเบิก ${product.name} จำนวน ${newItem.qty} ชิ้น`);
+                    if (window.sendAppLog) window.sendAppLog('สร้างใบจัด W5', `รอเบิก ${product.name} จำนวน ${newItem.qty} ${product.unit || 'ชิ้น'}`);
                     this.triggerToast('เพิ่มลงใบจัดเรียบร้อยแล้ว');
                     this.form.productId = ''; this.form.qty = null; this.searchTransaction = '';
                     this.activeTab = 'picklist';
@@ -756,7 +778,7 @@
                     // ลงประวัติการเบิกออก
                     this.history.push({ date: uiDate, time: uiTime, type: 'out', productName: item.productName, qty: this.pickModal.actualQty, user: this.loggedInUser });
                     
-                    if (window.sendAppLog) window.sendAppLog('หยิบสินค้าตามใบจัด W5', `เบิก ${item.productName} ออก ${this.pickModal.actualQty} ชิ้น`);
+                    if (window.sendAppLog) window.sendAppLog('หยิบสินค้าตามใบจัด W5', `เบิก ${item.productName} ออก ${this.pickModal.actualQty} ${product ? product.unit || 'ชิ้น' : 'ชิ้น'}`);
                     
                     this.triggerToast('หยิบสินค้าและตัดสต็อกเรียบร้อย');
                     this.pickModal.show = false;
@@ -766,7 +788,7 @@
             confirmRemovePickList(item) {
                 this.showConfirmUI(
                     'ยืนยันลบใบจัด', 
-                    `ต้องการลบรายการขอเบิกสินค้านี้ใช่หรือไม่?\n\n"${item.productName}"\nจำนวน ${item.qty} ชิ้น`,
+                    `ต้องการลบรายการขอเบิกสินค้านี้ใช่หรือไม่?\n\n"${item.productName}"\nจำนวน ${item.qty} ${this.getProductUnitByName(item.productName)}`,
                     'bg-red-600 hover:bg-red-700', 'fas fa-trash text-red-500',
                     this.processRemovePickList, item
                 );
@@ -786,7 +808,7 @@
             confirmUndo(log) {
                 this.showConfirmUI(
                     'ยืนยันการยกเลิกรายการ', 
-                    `ต้องการยกเลิกรายการนี้ใช่หรือไม่?\n\n"${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} ${log.productName} \nจำนวน ${log.qty} ชิ้น"\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`,
+                    `ต้องการยกเลิกรายการนี้ใช่หรือไม่?\n\n"${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} ${log.productName} \nจำนวน ${log.qty} ${this.getProductUnitByName(log.productName)}"\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`,
                     'bg-red-600 hover:bg-red-700', 'fas fa-exclamation-triangle text-red-500', 
                     this.processUndo, log
                 );
@@ -804,7 +826,7 @@
                 if (success) {
                     if (reverseType === 'in') product.stock += log.qty; else product.stock -= log.qty;
                     this.history.push({ type: reverseType, productName: product.name + ' [ยกเลิก]', qty: log.qty, user: this.loggedInUser, date: uiDate, time: uiTime });
-                    if (window.sendAppLog) window.sendAppLog(`ยกเลิกรายการ${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} W5`, `คืนยอด ${product.name} จำนวน ${log.qty} ชิ้น`);
+                    if (window.sendAppLog) window.sendAppLog(`ยกเลิกรายการ${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} W5`, `คืนยอด ${product.name} จำนวน ${log.qty} ${product.unit || 'ชิ้น'}`);
                     this.triggerToast('ยกเลิกรายการและคืนยอดสำเร็จ');
                 }
                 this.isSubmitting = false;
@@ -814,15 +836,20 @@
                 if(!this.form.productId) return '';
                 return this.products.find(p => p.id === this.form.productId).name;
             },
+            getSelectedProductUnit() {
+                if(!this.form.productId) return 'ชิ้น';
+                const p = this.products.find(p => p.id === this.form.productId);
+                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
+            },
             async addProduct() {
                 if(!this.newProductName.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อสินค้าที่ต้องการเพิ่ม'); return; }
                 const newId = this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) + 1 : 1;
-                const newProduct = { id: newId, name: this.newProductName.trim(), stock: 0 };
+                const newProduct = { id: newId, name: this.newProductName.trim(), stock: 0, unit: this.newProductUnit.trim() || 'ชิ้น' };
                 const success = await this.apiCall({ action: 'addProduct', product: newProduct });
                 if (success) {
                     this.products.unshift(newProduct);
                     if (window.sendAppLog) window.sendAppLog('เพิ่มสินค้าใหม่', `เพิ่ม ${this.newProductName.trim()} เข้าคลัง W5`);
-                    this.newProductName = ''; this.triggerToast('เพิ่มสินค้าใหม่เรียบร้อย');
+                    this.newProductName = ''; this.newProductUnit = 'ชิ้น'; this.triggerToast('เพิ่มสินค้าใหม่เรียบร้อย');
                 }
             },
             openEditModal(product) { this.editModal = { show: true, id: product.id, oldName: product.name, newName: product.name }; },
