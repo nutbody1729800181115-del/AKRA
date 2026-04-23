@@ -26,25 +26,64 @@
     const CURRENT_APP_NAME = "AKRA W5"; 
     const GOOGLE_APP_SCRIPT_URL_MAIN = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec";
 
-    const urlParams = new URLSearchParams(window.location.search);
-    let currentUser = urlParams.get('user');
+    // 1. ตั้งค่า URL ของหน้า Main Portal (สำหรับเด้งกลับไปหน้า Login)
+    const MAIN_PORTAL_URL = "https://akra-web.github.io/MainPortal/"; 
 
-    if (currentUser) {
-        sessionStorage.setItem('active_user', currentUser);
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        currentUser = sessionStorage.getItem('active_user');
-    }
+    // 2. กำหนดว่าแอปพลิเคชันนี้ ต้องการสิทธิ์อะไรบ้างถึงจะเข้าได้
+    const ALLOWED_ROLES = ["AKRA", "ADMIN"]; 
 
-    if (!currentUser) {
-        if (window.self !== window.top) {
-            currentUser = "Tester (โหมดจำลอง)"; 
-        } else {
-            console.warn("ไม่พบผู้ใช้งาน กำลังกลับไปหน้าเข้าสู่ระบบ");
-            window.location.href = "https://akra-web.github.io/Main/"; 
+    let appUser = null; // ตัวแปรเก็บข้อมูล User แบบเต็ม
+    let currentUser = null; // ตัวแปรสำหรับส่งชื่อไปให้ Vue ใช้งาน
+
+    function verifyAccess() {
+        const savedData = localStorage.getItem('akra_sso_user_data');
+
+        // [พิเศษ] อนุโลมให้โหมดจำลอง (เปิดในหน้าต่างทดสอบ) เข้าใช้งานได้เพื่อไม่ให้หน้าเว็บพัง
+        if (!savedData && window.self !== window.top) {
+            appUser = { name: "Tester (โหมดจำลอง)", roles: ["ADMIN"] };
+            currentUser = appUser.name;
+            return true;
+        }
+
+        // กรณีที่ 1: ยังไม่ได้ Login
+        if (!savedData) {
+            console.warn("❌ กรุณาเข้าสู่ระบบผ่านหน้า Main Portal ก่อนใช้งาน");
+            window.location.replace(MAIN_PORTAL_URL);
+            return false;
+        }
+
+        try {
+            appUser = JSON.parse(savedData);
+            
+            // กรณีที่ 2: เช็คสิทธิ์ (Roles)
+            const hasPermission = appUser.roles.some(role => ALLOWED_ROLES.includes(role));
+            const isAdmin = appUser.roles.includes("ADMIN"); // เผื่อไว้: ให้สิทธิ์ ADMIN เข้าได้
+
+            if (!hasPermission && !isAdmin) {
+                console.warn("⛔ คุณไม่มีสิทธิ์เข้าใช้งานระบบนี้");
+                window.location.replace(MAIN_PORTAL_URL);
+                return false;
+            }
+
+            // ผ่านด่านตรวจ! อนุญาตให้ใช้งานได้
+            currentUser = appUser.name;
+            console.log("✅ ยินดีต้อนรับ:", appUser.name, "สิทธิ์:", appUser.roles);
+            return true;
+
+        } catch (error) {
+            // กรณีข้อมูลพัง
+            localStorage.removeItem('akra_sso_user_data');
+            window.location.replace(MAIN_PORTAL_URL);
+            return false;
         }
     }
 
+    // สั่งทำงานทันทีที่โหลดสคริปต์
+    if(!verifyAccess()) {
+        throw new Error("Access Denied"); 
+    }
+
+    // ฟังก์ชันส่ง Log เดิมของระบบ
     window.sendAppLog = function(action, details) {
         const payload = { user: currentUser, action: action, app: CURRENT_APP_NAME, details: details };
         fetch(GOOGLE_APP_SCRIPT_URL_MAIN, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(err => console.error(err));
@@ -491,10 +530,8 @@
             return {
                 loggedInUser: currentUser || 'Guest',
                 
-                // --- ตั้งค่ารายชื่อ Admin ตรงนี้ (พิมพ์ชื่อให้ตรงกับระบบ Login) ---
-                adminList: ['ชื่อหัวหน้า1', 'ชื่อหัวหน้า2', 'Admin', 'Tester (โหมดจำลอง)'],
+                // ไม่จำเป็นต้องฮาร์ดโค้ดชื่อ Admin ตรงนี้แล้วครับ เพราะระบบดึงสิทธิ์จาก SSO มาเช็คแทน
                 isAdmin: false, 
-                // --------------------------------------------------------
 
                 activeTab: 'dashboard',
                 products: [], 
@@ -564,9 +601,11 @@
             }
         },
         mounted() {
-            // เช็คสิทธิ์ว่าเป็น Admin หรือไม่ตอนเปิดหน้าเว็บ
-            if (this.adminList.includes(this.loggedInUser)) {
-                this.isAdmin = true;
+            // เช็คสิทธิ์ว่าเป็น Admin หรือไม่ จากข้อมูลของ SSO ที่ตรวจจับได้ตอนเปิดเว็บ
+            if (typeof appUser !== 'undefined' && appUser !== null && appUser.roles) {
+                if (appUser.roles.includes('ADMIN')) {
+                    this.isAdmin = true;
+                }
             }
 
             this.loadData();
