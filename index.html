@@ -17,6 +17,18 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* สไตล์สำหรับไฟกระพริบ Real-time */
+        .pulse-dot {
+            height: 8px; width: 8px; border-radius: 50%; display: inline-block;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 1);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -24,7 +36,8 @@
 <!-- ================= SYSTEM AUTH & LOG SCRIPT ================= -->
 <script>
     const CURRENT_APP_NAME = "AKRA W5"; 
-    const GOOGLE_APP_SCRIPT_URL_MAIN = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec";
+    // อัปเดต URL สำหรับส่ง Log
+    const GOOGLE_APP_SCRIPT_URL_MAIN = "https://script.google.com/macros/s/AKfycbznbgC3VLTU14rw_oPifAM10wETg9Eo1l5N0ezWfNFLeGiRKRhlxIV92dSpqndXS6ua/exec";
 
     // 1. ตั้งค่า URL ของหน้า Main Portal (สำหรับเด้งกลับไปหน้า Login)
     const MAIN_PORTAL_URL = "https://akra-web.github.io/MainPortal/"; 
@@ -32,58 +45,32 @@
     // 2. กำหนดว่าแอปพลิเคชันนี้ ต้องการสิทธิ์อะไรบ้างถึงจะเข้าได้
     const ALLOWED_ROLES = ["AKRA", "ADMIN"]; 
 
-    let appUser = null; // ตัวแปรเก็บข้อมูล User แบบเต็ม
-    let currentUser = null; // ตัวแปรสำหรับส่งชื่อไปให้ Vue ใช้งาน
+    let appUser = null; 
+    let currentUser = null; 
 
     function verifyAccess() {
         const savedData = localStorage.getItem('akra_sso_user_data');
-
-        // [พิเศษ] อนุโลมให้โหมดจำลอง (เปิดในหน้าต่างทดสอบ) เข้าใช้งานได้เพื่อไม่ให้หน้าเว็บพัง
         if (!savedData && window.self !== window.top) {
             appUser = { name: "Tester (โหมดจำลอง)", roles: ["ADMIN"] };
             currentUser = appUser.name;
             return true;
         }
-
-        // กรณีที่ 1: ยังไม่ได้ Login
         if (!savedData) {
-            console.warn("❌ กรุณาเข้าสู่ระบบผ่านหน้า Main Portal ก่อนใช้งาน");
-            window.location.replace(MAIN_PORTAL_URL);
-            return false;
+            window.location.replace(MAIN_PORTAL_URL); return false;
         }
-
         try {
             appUser = JSON.parse(savedData);
-            
-            // กรณีที่ 2: เช็คสิทธิ์ (Roles)
             const hasPermission = appUser.roles.some(role => ALLOWED_ROLES.includes(role));
-            const isAdmin = appUser.roles.includes("ADMIN"); // เผื่อไว้: ให้สิทธิ์ ADMIN เข้าได้
-
-            if (!hasPermission && !isAdmin) {
-                console.warn("⛔ คุณไม่มีสิทธิ์เข้าใช้งานระบบนี้");
-                window.location.replace(MAIN_PORTAL_URL);
-                return false;
-            }
-
-            // ผ่านด่านตรวจ! อนุญาตให้ใช้งานได้
+            const isAdmin = appUser.roles.includes("ADMIN"); 
+            if (!hasPermission && !isAdmin) { window.location.replace(MAIN_PORTAL_URL); return false; }
             currentUser = appUser.name;
-            console.log("✅ ยินดีต้อนรับ:", appUser.name, "สิทธิ์:", appUser.roles);
             return true;
-
         } catch (error) {
-            // กรณีข้อมูลพัง
-            localStorage.removeItem('akra_sso_user_data');
-            window.location.replace(MAIN_PORTAL_URL);
-            return false;
+            localStorage.removeItem('akra_sso_user_data'); window.location.replace(MAIN_PORTAL_URL); return false;
         }
     }
+    if(!verifyAccess()) { throw new Error("Access Denied"); }
 
-    // สั่งทำงานทันทีที่โหลดสคริปต์
-    if(!verifyAccess()) {
-        throw new Error("Access Denied"); 
-    }
-
-    // ฟังก์ชันส่ง Log เดิมของระบบ
     window.sendAppLog = function(action, details) {
         const payload = { user: currentUser, action: action, app: CURRENT_APP_NAME, details: details };
         fetch(GOOGLE_APP_SCRIPT_URL_MAIN, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(err => console.error(err));
@@ -98,8 +85,8 @@
         <i class="fas fa-exclamation-triangle mr-1"></i> โหมดออฟไลน์
     </div>
 
-    <!-- Loading Overlay -->
-    <div v-if="isLoading" class="fixed inset-0 bg-white bg-opacity-80 z-[80] flex flex-col items-center justify-center">
+    <!-- โชว์เฉพาะตอนกดโหลดแบบตั้งใจ (ไม่โชว์ตอน Auto-refresh) -->
+    <div v-if="isLoading && !isSilentLoading" class="fixed inset-0 bg-white bg-opacity-80 z-[80] flex flex-col items-center justify-center">
         <i class="fas fa-circle-notch fa-spin text-4xl text-blue-600 mb-3"></i>
         <p class="text-gray-600 font-semibold text-sm">กำลังซิงค์ข้อมูลกับ Google Sheets...</p>
     </div>
@@ -116,128 +103,7 @@
     <!-- Main Content -->
     <main class="p-4">
         
-        <!-- ==================== DASHBOARD ==================== -->
-        <div v-show="activeTab === 'dashboard'" class="animate-fade-in">
-            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
-                <i class="fas fa-chart-line text-blue-600 mr-2"></i> ภาพรวมคลังสินค้า
-            </h2>
-            <div class="grid grid-cols-2 gap-3 mb-6">
-                <div class="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
-                    <p class="text-xs text-gray-500 font-semibold mb-1">สินค้าทั้งหมด (รายการ)</p>
-                    <p class="text-2xl font-bold text-gray-800">{{ products.length }}</p>
-                </div>
-                <div class="bg-white border-l-4 border-green-500 p-4 rounded-r-lg shadow-sm">
-                    <p class="text-xs text-gray-500 font-semibold mb-1">ยอดคงเหลือรวม</p>
-                    <p class="text-2xl font-bold text-gray-800">{{ totalItemsInStock }}</p>
-                </div>
-            </div>
-
-            <div class="flex justify-between items-end mb-3">
-                <h2 class="text-lg font-bold text-gray-800 flex items-center">
-                    <i class="fas fa-history text-blue-600 mr-2"></i> รายการเคลื่อนไหวล่าสุด
-                </h2>
-                <button @click="exportHistoryToCSV" class="text-xs text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center transition">
-                    <i class="fas fa-download mr-1"></i> ดาวน์โหลด
-                </button>
-            </div>
-            
-            <div class="bg-white border rounded-lg overflow-hidden shadow-sm mb-6">
-                <ul v-if="history.length > 0" class="divide-y max-h-60 overflow-y-auto">
-                    <li v-for="(log, index) in reversedHistory" :key="index" class="p-3 text-sm flex justify-between items-center hover:bg-gray-50 transition">
-                        <div class="flex-1 pr-2">
-                            <p class="font-semibold text-gray-800 line-clamp-1" :class="{'text-red-500 line-through': log.productName.includes('[ยกเลิก]')}">{{ log.productName }}</p>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <i class="fas fa-user-circle text-gray-400 mr-1"></i>{{ log.user }} 
-                                <span class="mx-1 text-gray-300">|</span> 
-                                <i class="far fa-clock text-gray-400 mr-1"></i>
-                                <span v-if="log.time">{{ formatDisplayDate(log.date) }} - {{ formatDisplayTime(log.time) }}</span>
-                                <span v-else>{{ formatDate(log.date) }}</span>
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div :class="log.type === 'in' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" class="font-bold px-3 py-1 rounded-full text-xs whitespace-nowrap shadow-sm">
-                                <span v-if="log.type === 'in'"><i class="fas fa-arrow-down mr-1"></i>รับ {{ log.qty }}</span>
-                                <span v-else><i class="fas fa-arrow-up mr-1"></i>เบิก {{ log.qty }}</span>
-                            </div>
-                            <button v-if="!log.productName.includes('[ยกเลิก]')" @click="confirmUndo(log)" class="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ยกเลิกรายการนี้">
-                                <i class="fas fa-undo"></i>
-                            </button>
-                        </div>
-                    </li>
-                </ul>
-                <div v-else class="p-8 text-center text-gray-400 flex flex-col items-center">
-                    <i class="fas fa-clipboard-list text-3xl mb-2 opacity-50"></i>
-                    <p class="text-sm">ยังไม่มีการเคลื่อนไหว</p>
-                </div>
-            </div>
-
-            <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
-                <i class="fas fa-boxes text-blue-600 mr-2"></i> สต็อกสินค้าปัจจุบัน
-            </h2>
-            <div class="relative mb-3">
-                <span class="absolute left-3 top-2.5 text-gray-400"><i class="fas fa-search"></i></span>
-                <input type="text" v-model="searchDashboard" placeholder="ค้นหาสินค้าในสต็อก..." class="w-full border-gray-300 border p-2 pl-9 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
-            </div>
-            <div class="bg-white border rounded-lg shadow-sm">
-                <ul v-if="filteredSortedProducts.length > 0" class="divide-y max-h-[400px] overflow-y-auto">
-                    <li v-for="product in filteredSortedProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
-                        <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
-                        <div class="flex items-center gap-2">
-                            <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center shadow-sm">
-                                {{ product.stock }} <span class="font-normal text-xs">{{ product.unit || 'ชิ้น' }}</span>
-                            </span>
-                            <button @click="quickWithdraw(product)" class="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-800 px-2 py-1.5 rounded-md border border-red-100 transition shadow-sm flex items-center gap-1">
-                                <i class="fas fa-arrow-up text-[10px]"></i> <span class="font-bold text-xs">เบิก</span>
-                            </button>
-                        </div>
-                    </li>
-                </ul>
-                <div v-else class="p-6 text-center text-gray-400 text-sm">ไม่พบสินค้าที่ค้นหา</div>
-            </div>
-        </div>
-
-        <!-- ==================== PICK LIST (ใบจัด) ==================== -->
-        <div v-show="activeTab === 'picklist'" class="animate-fade-in">
-            <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
-                <i class="fas fa-clipboard-check text-orange-500 mr-2"></i> รายการใบจัดสินค้า (รอเบิก)
-            </h2>
-            
-            <div v-if="pickList.length > 0" class="space-y-3">
-                <div v-for="item in pickList" :key="item.pickId" class="bg-white p-4 border border-orange-200 rounded-xl shadow-sm relative overflow-hidden">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-orange-400"></div>
-                    <div class="pl-2">
-                        <h3 class="font-bold text-gray-800 mb-1 leading-tight">{{ item.productName }}</h3>
-                        <div class="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-3 gap-y-1">
-                            <span><i class="fas fa-user-edit mr-1"></i>สั่งโดย: {{ item.requestedBy }}</span>
-                            <span><i class="far fa-clock mr-1"></i>{{ item.timeStr }}</span>
-                        </div>
-                        <div class="flex justify-between items-end border-t border-gray-100 pt-3">
-                            <div class="text-sm">
-                                <span class="text-gray-500">จำนวนที่ขอ: </span>
-                                <span class="font-bold text-orange-600 text-lg">{{ item.qty }}</span> <span class="text-gray-500 text-xs">{{ getProductUnit(item.productId) }}</span>
-                            </div>
-                            <div class="flex gap-2">
-                                <button @click="confirmRemovePickList(item)" class="text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-lg transition text-xs font-bold border border-gray-200">
-                                    ลบ
-                                </button>
-                                <button @click="openPickModal(item)" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-1.5 rounded-lg transition text-sm font-bold shadow-sm flex items-center">
-                                    <i class="fas fa-box-open mr-1.5"></i> หยิบสินค้า
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div v-else class="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center flex flex-col items-center">
-                <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                    <i class="fas fa-clipboard-check text-2xl text-gray-300"></i>
-                </div>
-                <h3 class="text-gray-500 font-bold mb-1">ไม่มีรายการรอเบิก</h3>
-                <p class="text-xs text-gray-400">สร้างใบจัดสินค้าได้จากหน้า "เบิก-รับ"</p>
-            </div>
-        </div>
-
-        <!-- ==================== TRANSACTION (เบิก-รับ) ==================== -->
+        <!-- ==================== TRANSACTION (เบิก-รับ อยู่หน้าแรกสุด) ==================== -->
         <div v-show="activeTab === 'transaction'" class="animate-fade-in">
             <h2 class="text-lg font-bold mb-4 text-gray-800">ทำรายการ เบิก / รับเข้า</h2>
             
@@ -253,30 +119,15 @@
             <div class="space-y-4 bg-white p-4 border rounded-xl shadow-sm">
                 <div class="relative">
                     <label class="block text-sm font-semibold text-gray-700 mb-1">เลือกสินค้า <span class="text-red-500">*</span></label>
-                    
                     <div class="relative z-30">
                         <span class="absolute left-3 top-3 text-gray-400"><i class="fas fa-search"></i></span>
-                        <input type="text" 
-                               v-model="searchTransaction" 
-                               @focus="showDropdown = true"
-                               @input="handleSearchInput"
-                               placeholder="พิมพ์ชื่อเพื่อค้นหา..." 
-                               class="w-full border-gray-300 border p-3 pl-9 pr-10 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                        
-                        <button v-if="searchTransaction" @click="clearSelection" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 transition">
-                            <i class="fas fa-times-circle text-lg"></i>
-                        </button>
+                        <input type="text" v-model="searchTransaction" @focus="showDropdown = true" @input="handleSearchInput" placeholder="พิมพ์ชื่อเพื่อค้นหา..." class="w-full border-gray-300 border p-3 pl-9 pr-10 rounded-lg text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <button v-if="searchTransaction" @click="clearSelection" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 transition"><i class="fas fa-times-circle text-lg"></i></button>
                     </div>
-
                     <div v-if="showDropdown" @click="showDropdown = false" class="fixed inset-0 z-20"></div>
-
                     <div v-if="showDropdown" class="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                         <ul v-if="filteredTransactionProducts.length > 0">
-                            <li v-for="product in filteredTransactionProducts" 
-                                :key="product.id" 
-                                @click="selectTransactionProduct(product)"
-                                :class="{'bg-blue-50 border-l-4 border-blue-500': form.productId === product.id}"
-                                class="p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer flex justify-between items-center text-sm transition-colors">
+                            <li v-for="product in filteredTransactionProducts" :key="product.id" @click="selectTransactionProduct(product)" :class="{'bg-blue-50 border-l-4 border-blue-500': form.productId === product.id}" class="p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer flex justify-between items-center text-sm transition-colors">
                                 <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
                                 <span class="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">เหลือ: {{ product.stock }} {{ product.unit || 'ชิ้น' }}</span>
                             </li>
@@ -301,15 +152,173 @@
                     </div>
                 </div>
 
-                <!-- ปุ่มเปลี่ยนตามประเภทการทำรายการ -->
                 <div class="flex gap-3 pt-3">
                     <button v-if="form.type === 'out'" @click="verifyAddPickList" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors flex justify-center items-center text-sm">
                         <i class="fas fa-clipboard-list mr-1.5"></i> สั่งลงใบจัด
                     </button>
                     <button @click="verifyTransaction" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors flex justify-center items-center text-sm">
-                        <i class="fas fa-check-circle mr-1.5"></i> {{ form.type === 'in' ? 'บันทึกรับเข้าทันที' : 'เบิกตัดสต็อกทันที' }}
+                        <i class="fas fa-check-circle mr-1.5"></i> {{ form.type === 'in' ? 'บันทึกรับเข้า' : 'เบิกตัดสต็อก' }}
                     </button>
                 </div>
+            </div>
+
+            <!-- 🌟 เพิ่มรายการสต็อกคงเหลือไว้ด้านล่างหน้าเบิกรับ -->
+            <div class="mt-8 border-t border-gray-200 pt-6">
+                <h2 class="text-lg font-bold mb-3 text-gray-800 flex items-center">
+                    <i class="fas fa-boxes text-blue-600 mr-2"></i> สต็อกสินค้าปัจจุบัน
+                </h2>
+                <div class="relative mb-3">
+                    <span class="absolute left-3 top-2.5 text-gray-400"><i class="fas fa-search"></i></span>
+                    <input type="text" v-model="searchTransactionList" placeholder="ค้นหาดูสต็อกสินค้า..." class="w-full border-gray-300 border p-2 pl-9 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
+                </div>
+                <div class="bg-white border rounded-lg shadow-sm">
+                    <ul v-if="filteredTransactionListProducts.length > 0" class="divide-y max-h-[350px] overflow-y-auto">
+                        <li v-for="product in filteredTransactionListProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50 transition">
+                            <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
+                            <div class="flex items-center gap-2">
+                                <span :class="product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'" class="font-bold px-2 py-1 rounded-md min-w-[3rem] text-center shadow-sm">
+                                    {{ product.stock }} <span class="font-normal text-xs">{{ product.unit || 'ชิ้น' }}</span>
+                                </span>
+                                <button @click="quickWithdraw(product)" class="text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-800 px-2 py-1.5 rounded-md border border-red-100 transition shadow-sm flex items-center gap-1">
+                                    <i class="fas fa-arrow-up text-[10px]"></i> <span class="font-bold text-xs">เบิก</span>
+                                </button>
+                            </div>
+                        </li>
+                    </ul>
+                    <div v-else class="p-6 text-center text-gray-400 text-sm">ไม่พบสินค้าที่ค้นหา</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== DASHBOARD (อัปเกรดเป็น Real-time) ==================== -->
+        <div v-show="activeTab === 'dashboard'" class="animate-fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-chart-pie text-blue-600 mr-2"></i> Real-time Dashboard
+                </h2>
+                <div class="text-[10px] text-gray-400 flex items-center bg-white px-2 py-1 rounded-full shadow-sm border">
+                    <span class="pulse-dot bg-green-500 mr-1.5"></span> อัปเดตสด
+                </div>
+            </div>
+
+            <!-- กริตสรุปข้อมูล 4 ช่อง -->
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-white border-l-4 border-blue-500 p-4 rounded-r-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <p class="text-xs text-gray-500 font-semibold mb-1">SKU ทั้งหมด</p>
+                        <i class="fas fa-boxes text-blue-200"></i>
+                    </div>
+                    <p class="text-2xl font-bold text-gray-800">{{ products.length }}</p>
+                </div>
+                <div class="bg-white border-l-4 border-green-500 p-4 rounded-r-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <p class="text-xs text-gray-500 font-semibold mb-1">ยอดรวมคลัง</p>
+                        <i class="fas fa-layer-group text-green-200"></i>
+                    </div>
+                    <p class="text-2xl font-bold text-gray-800">{{ totalItemsInStock }}</p>
+                </div>
+                <div class="bg-white border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <p class="text-xs text-gray-500 font-semibold mb-1 text-red-500">ของใกล้หมด</p>
+                        <i class="fas fa-exclamation-triangle text-red-200"></i>
+                    </div>
+                    <p class="text-2xl font-bold text-red-600">{{ lowStockItems.length }} <span class="text-xs font-normal text-gray-400">รายการ</span></p>
+                </div>
+                <div class="bg-white border-l-4 border-purple-500 p-4 rounded-r-lg shadow-sm">
+                    <div class="flex justify-between items-start">
+                        <p class="text-xs text-gray-500 font-semibold mb-1">ความเคลื่อนไหว</p>
+                        <i class="fas fa-bolt text-purple-200"></i>
+                    </div>
+                    <p class="text-2xl font-bold text-gray-800">{{ todayHistoryCount }} <span class="text-xs font-normal text-gray-400">ครั้งวันนี้</span></p>
+                </div>
+            </div>
+
+            <!-- แจ้งเตือนสินค้าใกล้หมด (แสดงเมื่อมีของต่ำกว่า 10 ชิ้น) -->
+            <div v-if="lowStockItems.length > 0" class="mb-6 bg-red-50 border border-red-100 rounded-xl overflow-hidden shadow-sm">
+                <div class="bg-red-100 px-3 py-2 border-b border-red-200 flex items-center">
+                    <i class="fas fa-exclamation-circle text-red-500 mr-2 text-sm"></i>
+                    <span class="text-sm font-bold text-red-700">แจ้งเตือนสินค้าใกล้หมด (ต่ำกว่า 10)</span>
+                </div>
+                <ul class="divide-y divide-red-100 max-h-40 overflow-y-auto">
+                    <li v-for="item in lowStockItems" :key="item.id" class="px-3 py-2 text-xs flex justify-between items-center hover:bg-red-100/50">
+                        <span class="text-gray-700 line-clamp-1 pr-2 flex-1">{{ item.name }}</span>
+                        <span class="font-bold text-red-600 bg-white px-2 py-0.5 rounded border border-red-200 shadow-sm">{{ item.stock }} {{ item.unit }}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="flex justify-between items-end mb-3 mt-4">
+                <h2 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-history text-gray-600 mr-2"></i> ประวัติล่าสุด (Log)
+                </h2>
+                <button @click="exportHistoryToCSV" class="text-xs text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center transition">
+                    <i class="fas fa-download mr-1"></i> ดาวน์โหลด
+                </button>
+            </div>
+            
+            <div class="bg-white border rounded-lg overflow-hidden shadow-sm mb-6">
+                <ul v-if="history.length > 0" class="divide-y max-h-60 overflow-y-auto">
+                    <li v-for="(log, index) in reversedHistory" :key="index" class="p-3 text-sm flex justify-between items-center hover:bg-gray-50 transition">
+                        <div class="flex-1 pr-2">
+                            <p class="font-semibold text-gray-800 line-clamp-1" :class="{'text-red-500 line-through': log.productName.includes('[ยกเลิก]')}">{{ log.productName }}</p>
+                            <p class="text-[11px] text-gray-500 mt-1">
+                                <i class="fas fa-user-circle text-gray-400 mr-1"></i>{{ log.user }} 
+                                <span class="mx-1 text-gray-300">|</span> 
+                                <i class="far fa-clock text-gray-400 mr-1"></i>
+                                <span v-if="log.time">{{ formatDisplayDate(log.date) }} - {{ formatDisplayTime(log.time) }}</span>
+                                <span v-else>{{ formatDate(log.date) }}</span>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div v-if="log.type === 'adjust'" class="bg-purple-100 text-purple-700 font-bold px-2 py-1 rounded-md text-[10px] shadow-sm">
+                                <i class="fas fa-edit mr-1"></i>ปรับสต็อก
+                            </div>
+                            <div v-else :class="log.type === 'in' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'" class="font-bold px-3 py-1 rounded-full text-xs whitespace-nowrap shadow-sm">
+                                <span v-if="log.type === 'in'"><i class="fas fa-arrow-down mr-1"></i>รับ {{ log.qty }}</span>
+                                <span v-else><i class="fas fa-arrow-up mr-1"></i>เบิก {{ log.qty }}</span>
+                            </div>
+                            <button v-if="!log.productName.includes('[ยกเลิก]') && log.type !== 'adjust'" @click="confirmUndo(log)" class="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="ยกเลิกรายการนี้">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </div>
+                    </li>
+                </ul>
+                <div v-else class="p-8 text-center text-gray-400 flex flex-col items-center">
+                    <i class="fas fa-clipboard-list text-3xl mb-2 opacity-50"></i><p class="text-sm">ยังไม่มีการเคลื่อนไหว</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PICK LIST ==================== -->
+        <div v-show="activeTab === 'picklist'" class="animate-fade-in">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center"><i class="fas fa-clipboard-check text-orange-500 mr-2"></i> รายการใบจัดสินค้า (รอเบิก)</h2>
+            <div v-if="pickList.length > 0" class="space-y-3">
+                <div v-for="item in pickList" :key="item.pickId" class="bg-white p-4 border border-orange-200 rounded-xl shadow-sm relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-orange-400"></div>
+                    <div class="pl-2">
+                        <h3 class="font-bold text-gray-800 mb-1 leading-tight">{{ item.productName }}</h3>
+                        <div class="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-3 gap-y-1">
+                            <span><i class="fas fa-user-edit mr-1"></i>สั่งโดย: {{ item.requestedBy }}</span>
+                            <span><i class="far fa-clock mr-1"></i>{{ item.timeStr }}</span>
+                        </div>
+                        <div class="flex justify-between items-end border-t border-gray-100 pt-3">
+                            <div class="text-sm">
+                                <span class="text-gray-500">จำนวนที่ขอ: </span>
+                                <span class="font-bold text-orange-600 text-lg">{{ item.qty }}</span> <span class="text-gray-500 text-xs">{{ getProductUnit(item.productId) }}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="confirmRemovePickList(item)" class="text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-3 py-1.5 rounded-lg transition text-xs font-bold border border-gray-200">ลบ</button>
+                                <button @click="openPickModal(item)" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-1.5 rounded-lg transition text-sm font-bold shadow-sm flex items-center">
+                                    <i class="fas fa-box-open mr-1.5"></i> หยิบสินค้า
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="bg-white border-2 border-dashed border-gray-200 rounded-xl p-10 text-center flex flex-col items-center">
+                <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3"><i class="fas fa-clipboard-check text-2xl text-gray-300"></i></div>
+                <h3 class="text-gray-500 font-bold mb-1">ไม่มีรายการรอเบิก</h3>
             </div>
         </div>
 
@@ -336,8 +345,14 @@
                 </div>
                 <ul v-if="filteredManageProducts.length > 0" class="divide-y max-h-[500px] overflow-y-auto">
                     <li v-for="product in filteredManageProducts" :key="product.id" class="p-3 flex justify-between items-center text-sm hover:bg-gray-50">
-                        <span class="text-gray-700 line-clamp-2 pr-2 leading-tight flex-1">{{ product.name }}</span>
+                        <div class="flex-1 pr-2">
+                            <span class="text-gray-700 line-clamp-2 leading-tight">{{ product.name }}</span>
+                            <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mt-1 inline-block border">คงเหลือ: {{ product.stock }} {{ product.unit }}</span>
+                        </div>
                         <div class="flex gap-1 ml-2">
+                            <button @click="openAdjustModal(product)" class="text-purple-500 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 p-2 rounded-md transition border border-purple-100" title="ปรับสต็อก">
+                                <i class="fas fa-calculator"></i>
+                            </button>
                             <button @click="openEditModal(product)" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 p-2 rounded-md transition" title="แก้ไขชื่อ">
                                 <i class="fas fa-edit"></i>
                             </button>
@@ -353,24 +368,23 @@
 
     </main>
 
-    <!-- Bottom Navigation -->
+    <!-- Bottom Navigation (เรียงใหม่ ให้เบิกรับอยู่ซ้ายสุด) -->
     <nav class="fixed bottom-0 w-full max-w-md bg-white border-t flex justify-between text-xs text-gray-500 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-10">
-        <button @click="activeTab = 'dashboard'" :class="{'text-blue-700 font-bold': activeTab === 'dashboard'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
-            <i class="fas fa-chart-pie text-[20px]"></i> แดชบอร์ด
-            <div v-if="activeTab === 'dashboard'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
+        <button @click="activeTab = 'transaction'" :class="{'text-blue-700 font-bold': activeTab === 'transaction'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+            <i class="fas fa-exchange-alt text-[20px]"></i> เบิก-รับ
+            <div v-if="activeTab === 'transaction'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
         </button>
         <button @click="activeTab = 'picklist'" :class="{'text-blue-700 font-bold': activeTab === 'picklist'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
             <div class="relative">
                 <i class="fas fa-clipboard-check text-[20px]"></i>
-                <!-- แจ้งเตือนวงกลมแดงถ้ามีใบจัดรออยู่ -->
                 <div v-if="pickList.length > 0" class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center border border-white">{{ pickList.length }}</div>
             </div>
             ใบจัด
             <div v-if="activeTab === 'picklist'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
         </button>
-        <button @click="activeTab = 'transaction'" :class="{'text-blue-700 font-bold': activeTab === 'transaction'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
-            <i class="fas fa-exchange-alt text-[20px]"></i> เบิก-รับ
-            <div v-if="activeTab === 'transaction'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
+        <button @click="activeTab = 'dashboard'" :class="{'text-blue-700 font-bold': activeTab === 'dashboard'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
+            <i class="fas fa-chart-pie text-[20px]"></i> แดชบอร์ด
+            <div v-if="activeTab === 'dashboard'" class="absolute top-0 w-8 h-1 bg-blue-700 rounded-b-md"></div>
         </button>
         <button v-if="isAdmin" @click="activeTab = 'manage'" :class="{'text-blue-700 font-bold': activeTab === 'manage'}" class="flex-1 py-3.5 flex flex-col items-center gap-1.5 transition-colors relative">
             <i class="fas fa-box-open text-[20px]"></i> จัดการ
@@ -378,16 +392,13 @@
         </button>
     </nav>
 
-    <!-- Modal ยืนยันการหยิบสินค้า (ปรับจำนวนได้) -->
+    <!-- Modal ยืนยันการหยิบสินค้า -->
     <transition name="fade">
         <div v-if="pickModal.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
             <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl transform transition-all">
-                <div class="flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 text-orange-500 mx-auto mb-3">
-                    <i class="fas fa-box-open text-xl"></i>
-                </div>
+                <div class="flex items-center justify-center w-12 h-12 rounded-full bg-orange-100 text-orange-500 mx-auto mb-3"><i class="fas fa-box-open text-xl"></i></div>
                 <h3 class="text-lg font-bold text-center text-gray-800 mb-1">ยืนยันการหยิบสินค้า</h3>
                 <p class="text-sm text-center text-gray-500 mb-4 line-clamp-2 px-2">{{ pickModal.item ? pickModal.item.productName : '' }}</p>
-                
                 <div class="bg-gray-50 p-3 rounded-lg border mb-4">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-semibold text-gray-500">จำนวนที่ขอเบิก:</span>
@@ -396,17 +407,37 @@
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-1">จำนวนที่หยิบได้จริง <span class="text-orange-500">*</span></label>
                         <input type="number" v-model.number="pickModal.actualQty" min="1" class="w-full border-gray-300 border p-2.5 rounded-lg text-lg font-bold text-center text-orange-600 focus:ring-2 focus:ring-orange-500 outline-none">
-                        <p class="text-[10px] text-gray-400 mt-1 text-center">*แก้ไขตัวเลขได้ หากของหน้าเชลฟ์มีไม่พอ</p>
                     </div>
                 </div>
-
                 <div class="flex gap-3">
-                    <button @click="pickModal.show = false" :disabled="isSubmitting" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm">
-                        ยกเลิก
-                    </button>
-                    <button @click="submitPick" :disabled="isSubmitting" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center">
-                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i>
-                        ยืนยันตัดสต็อก
+                    <button @click="pickModal.show = false" :disabled="isSubmitting" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm">ยกเลิก</button>
+                    <button @click="submitPick" :disabled="isSubmitting" class="flex-1 bg-orange-500 text-white font-bold py-2.5 rounded-lg text-sm flex justify-center items-center"><i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i>ยืนยัน</button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+    <!-- Modal ปรับสต็อกมือ (Admin) -->
+    <transition name="fade">
+        <div v-if="adjustModal.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
+            <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-calculator text-purple-500 mr-2"></i> ปรับแก้สต็อก (Admin)</h3>
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">สินค้า</label>
+                    <div class="p-2.5 bg-gray-100 rounded border text-sm text-gray-600 line-clamp-2">{{ adjustModal.name }}</div>
+                </div>
+                <div class="flex items-center justify-between mb-4 px-2">
+                    <span class="text-sm font-semibold text-gray-600">สต็อกเดิม:</span>
+                    <span class="text-lg font-bold text-gray-400 line-through">{{ adjustModal.oldStock }} {{ adjustModal.unit }}</span>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold text-purple-700 mb-1">แก้ไขตัวเลขสต็อกให้เป็น <span class="text-red-500">*</span></label>
+                    <input type="number" v-model.number="adjustModal.newStock" min="0" class="w-full border-gray-300 border p-3 rounded-lg text-xl font-bold text-center text-purple-700 focus:ring-2 focus:ring-purple-500 outline-none bg-purple-50">
+                </div>
+                <div class="flex gap-3">
+                    <button @click="adjustModal.show = false" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm">ยกเลิก</button>
+                    <button @click="saveAdjustStock" :disabled="isSubmitting" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center">
+                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i> บันทึกยอด
                     </button>
                 </div>
             </div>
@@ -418,13 +449,11 @@
         <div v-if="messageBox.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
             <div class="bg-white rounded-xl p-5 w-full max-w-[300px] shadow-2xl transform transition-all text-center">
                 <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" :class="messageBox.isError ? 'bg-red-100 text-red-500' : 'bg-blue-100 text-blue-500'">
-                    <i class="fas text-2xl" :class="messageBox.isError ? 'fa-times' : 'fa-info'"></i>
+                    <i class="fas fa-times text-2xl" :class="messageBox.isError ? 'fa-times' : 'fa-info'"></i>
                 </div>
                 <h3 class="text-lg font-bold text-gray-800 mb-2">{{ messageBox.title }}</h3>
                 <p class="text-sm text-gray-600 mb-5">{{ messageBox.message }}</p>
-                <button @click="messageBox.show = false" class="w-full font-bold py-2.5 rounded-lg transition text-sm" :class="messageBox.isError ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-blue-600 text-white hover:bg-blue-700'">
-                    ตกลง
-                </button>
+                <button @click="messageBox.show = false" class="w-full font-bold py-2.5 rounded-lg transition text-sm" :class="messageBox.isError ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-blue-600 text-white hover:bg-blue-700'">ตกลง</button>
             </div>
         </div>
     </transition>
@@ -433,13 +462,11 @@
     <transition name="fade">
         <div v-if="confirmDialog.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
             <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl transform transition-all">
-                <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center">
-                    <i class="mr-2" :class="confirmDialog.iconClass"></i> {{ confirmDialog.title }}
-                </h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-2 flex items-center"><i class="mr-2" :class="confirmDialog.iconClass"></i> {{ confirmDialog.title }}</h3>
                 <p class="text-sm text-gray-600 mb-6 whitespace-pre-line">{{ confirmDialog.message }}</p>
                 <div class="flex gap-3">
-                    <button @click="confirmDialog.show = false" :disabled="isSubmitting" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50">ยกเลิก</button>
-                    <button @click="executeConfirmDialog" :disabled="isSubmitting" class="flex-1 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center disabled:opacity-50" :class="confirmDialog.btnClass">
+                    <button @click="confirmDialog.show = false" :disabled="isSubmitting" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm disabled:opacity-50">ยกเลิก</button>
+                    <button @click="executeConfirmDialog" :disabled="isSubmitting" class="flex-1 text-white font-bold py-2.5 rounded-lg text-sm flex justify-center items-center disabled:opacity-50" :class="confirmDialog.btnClass">
                         <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i> <span>ยืนยัน</span>
                     </button>
                 </div>
@@ -447,7 +474,7 @@
         </div>
     </transition>
 
-    <!-- Edit Product Modal -->
+    <!-- Edit Name Modal -->
     <transition name="fade">
         <div v-if="editModal.show" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55]">
             <div class="bg-white rounded-xl p-5 w-full max-w-[320px] shadow-2xl">
@@ -458,19 +485,17 @@
                 </div>
                 <div class="mb-6">
                     <label class="block text-xs font-semibold text-gray-700 mb-1">ชื่อใหม่ <span class="text-red-500">*</span></label>
-                    <input type="text" v-model="editModal.newName" @keyup.enter="saveEditProduct" class="w-full border-gray-300 border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ระบุชื่อใหม่...">
+                    <input type="text" v-model="editModal.newName" @keyup.enter="saveEditProduct" class="w-full border-gray-300 border p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div class="flex gap-3">
-                    <button @click="editModal.show = false" class="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold py-2.5 rounded-lg transition text-sm">ยกเลิก</button>
-                    <button @click="saveEditProduct" :disabled="isSubmitting" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition text-sm flex justify-center items-center">
-                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i> บันทึก
-                    </button>
+                    <button @click="editModal.show = false" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg text-sm">ยกเลิก</button>
+                    <button @click="saveEditProduct" :disabled="isSubmitting" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-lg text-sm"><i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i> บันทึก</button>
                 </div>
             </div>
         </div>
     </transition>
 
-    <!-- Transaction Confirmation Modal Popup -->
+    <!-- Transaction Confirmation Modal -->
     <transition name="fade">
         <div v-if="showModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-[55] pb-20">
             <div class="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl transform transition-all">
@@ -479,7 +504,6 @@
                         <i :class="form.type === 'in' ? 'fas fa-arrow-down' : 'fas fa-arrow-up'" class="text-3xl"></i>
                     </div>
                     <h3 class="text-xl font-bold text-gray-800">ยืนยันทำรายการทันที</h3>
-                    <p class="text-sm text-gray-500 mt-1">กรุณาตรวจสอบข้อมูลก่อนบันทึก</p>
                 </div>
                 <div class="bg-gray-50 p-4 rounded-xl mb-6 border border-gray-100 space-y-3">
                     <div class="flex justify-between items-start border-b border-gray-200 pb-2">
@@ -496,22 +520,16 @@
                         <span class="text-xs text-gray-500">จำนวน:</span> 
                         <span class="font-bold text-xl text-blue-700">{{ form.qty }} <span class="text-sm font-normal text-gray-600">{{ getSelectedProductUnit() }}</span></span>
                     </div>
-                    <div class="flex justify-between items-center pt-1">
-                        <span class="text-xs text-gray-500">ผู้ทำรายการ:</span> 
-                        <span class="font-semibold text-gray-800 text-sm"><i class="fas fa-user-circle mr-1 text-gray-400"></i>{{ form.user }}</span>
-                    </div>
                 </div>
                 <div class="flex gap-3">
-                    <button @click="showModal = false" :disabled="isSubmitting" class="flex-1 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-3 rounded-xl transition text-sm disabled:opacity-50">แก้ไข</button>
-                    <button @click="confirmTransaction" :disabled="isSubmitting" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200 font-bold py-3 rounded-xl transition text-sm flex justify-center items-center">
-                        <i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i> <span>{{ isSubmitting ? 'กำลังบันทึก...' : 'ยืนยัน' }}</span>
-                    </button>
+                    <button @click="showModal = false" :disabled="isSubmitting" class="flex-1 bg-white border border-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm">แก้ไข</button>
+                    <button @click="confirmTransaction" :disabled="isSubmitting" class="flex-1 bg-blue-600 text-white shadow-md font-bold py-3 rounded-xl text-sm"><i v-if="isSubmitting" class="fas fa-spinner fa-spin mr-2"></i>ยืนยัน</button>
                 </div>
             </div>
         </div>
     </transition>
     
-    <!-- Toast Notification (Success) -->
+    <!-- Toast Notification -->
     <transition name="fade">
         <div v-if="showToast" class="fixed top-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-[70] text-sm font-semibold flex items-center whitespace-nowrap">
             <i class="fas fa-check-circle text-green-400 mr-2 text-lg"></i> {{ toastMessage }}
@@ -522,189 +540,146 @@
 
 <script>
     const { createApp } = Vue;
-
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbztG6wrhwAOPSaKyIL7cVgNObKYrB5HIWevTJXKa2HOp1vvvWD_PofSEyPA9bkmxeGy/exec"; 
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbznbgC3VLTU14rw_oPifAM10wETg9Eo1l5N0ezWfNFLeGiRKRhlxIV92dSpqndXS6ua/exec"; 
 
     createApp({
         data() {
             return {
                 loggedInUser: currentUser || 'Guest',
-                
-                // ไม่จำเป็นต้องฮาร์ดโค้ดชื่อ Admin ตรงนี้แล้วครับ เพราะระบบดึงสิทธิ์จาก SSO มาเช็คแทน
                 isAdmin: false, 
-
-                activeTab: 'dashboard',
+                activeTab: 'transaction', // 🌟 ตั้งค่าเริ่มต้นให้เปิดหน้าเบิกรับก่อน
                 products: [], 
                 history: [],
                 pickList: [], 
-                form: {
-                    type: 'out',
-                    productId: '',
-                    qty: null,
-                    user: currentUser || ''
-                },
-                newProductName: '',
-                newProductUnit: 'ชิ้น', // ค่าเริ่มต้นสำหรับเพิ่มหน่วย
-                searchDashboard: '',
-                searchTransaction: '',
-                searchManage: '',
-                showDropdown: false,
-                showModal: false,
-                showToast: false,
-                toastMessage: '',
-                isLoading: false,
-                isSubmitting: false,
-                isOnline: WEB_APP_URL.trim() !== '',
+                form: { type: 'out', productId: '', qty: null, user: currentUser || '' },
+                newProductName: '', newProductUnit: 'ชิ้น', searchDashboard: '', searchTransaction: '', searchManage: '', searchTransactionList: '',
+                showDropdown: false, showModal: false, showToast: false, toastMessage: '',
+                isLoading: false, isSilentLoading: false, isSubmitting: false, isOnline: WEB_APP_URL.trim() !== '',
                 
                 messageBox: { show: false, title: '', message: '', isError: false },
                 confirmDialog: { show: false, title: '', message: '', iconClass: '', btnClass: '', action: null, payload: null },
                 editModal: { show: false, id: null, oldName: '', newName: '' },
+                pickModal: { show: false, item: null, actualQty: 0 },
                 
-                // สำหรับหน้าต่างกรอกจำนวนตอนหยิบสินค้า
-                pickModal: { show: false, item: null, actualQty: 0 }
+                // 🌟 Modal ใหม่สำหรับปรับสต็อก
+                adjustModal: { show: false, id: null, name: '', oldStock: 0, newStock: 0, unit: '' },
+                
+                refreshInterval: null
             }
         },
         computed: {
             reversedHistory() { return [...this.history].reverse(); },
             totalItemsInStock() { return this.products.reduce((sum, p) => sum + p.stock, 0); },
-            sortedProducts() {
-                return [...this.products].sort((a, b) => {
-                    if(b.stock !== a.stock) return b.stock - a.stock;
-                    return a.name.localeCompare(b.name, 'th');
-                });
-            },
+            sortedProducts() { return [...this.products].sort((a, b) => b.stock - a.stock || a.name.localeCompare(b.name, 'th')); },
             filteredSortedProducts() {
                 if (!this.searchDashboard) return this.sortedProducts;
-                const query = this.searchDashboard.toLowerCase();
-                return this.sortedProducts.filter(p => p.name.toLowerCase().includes(query));
+                return this.sortedProducts.filter(p => p.name.toLowerCase().includes(this.searchDashboard.toLowerCase()));
+            },
+            filteredTransactionListProducts() {
+                if (!this.searchTransactionList) return this.sortedProducts;
+                return this.sortedProducts.filter(p => p.name.toLowerCase().includes(this.searchTransactionList.toLowerCase()));
             },
             filteredTransactionProducts() {
                 if (!this.searchTransaction) return this.products;
-                const query = this.searchTransaction.toLowerCase();
-                return this.products.filter(p => p.name.toLowerCase().includes(query));
+                return this.products.filter(p => p.name.toLowerCase().includes(this.searchTransaction.toLowerCase()));
             },
             filteredManageProducts() {
                 if (!this.searchManage) return this.products;
-                const query = this.searchManage.toLowerCase();
-                return this.products.filter(p => p.name.toLowerCase().includes(query));
+                return this.products.filter(p => p.name.toLowerCase().includes(this.searchManage.toLowerCase()));
+            },
+            // 🌟 คำนวณสินค้าใกล้หมด (ต่ำกว่า 10)
+            lowStockItems() {
+                return this.products.filter(p => p.stock < 10);
+            },
+            // 🌟 นับจำนวนรายการเคลื่อนไหวเฉพาะวันนี้
+            todayHistoryCount() {
+                const todayStr = this.getTodayStr();
+                return this.history.filter(h => {
+                    const hDate = h.time ? this.formatDisplayDate(h.date) : this.formatDate(h.date).split(' - ')[0];
+                    return hDate === todayStr;
+                }).length;
             }
         },
         watch: {
-            activeTab() {
-                this.searchDashboard = '';
-                this.searchTransaction = '';
-                this.searchManage = '';
-                this.showDropdown = false;
-                this.form.productId = ''; 
-                this.form.qty = null;
-                this.form.type = 'out'; 
+            activeTab(newTab) {
+                this.searchDashboard = ''; this.searchTransaction = ''; this.searchManage = ''; this.searchTransactionList = '';
+                this.showDropdown = false; this.form.productId = ''; this.form.qty = null; this.form.type = 'out'; 
+                
+                // ถ้าย้ายมาหน้า Dashboard ให้ดึงข้อมูลล่าสุดเลยทันที (เพื่อ Real-time แบบไม่โหลดหมุนจอ)
+                if(newTab === 'dashboard') {
+                    this.loadData(true);
+                }
             }
         },
         mounted() {
-            // เช็คสิทธิ์ว่าเป็น Admin หรือไม่ จากข้อมูลของ SSO ที่ตรวจจับได้ตอนเปิดเว็บ
             if (typeof appUser !== 'undefined' && appUser !== null && appUser.roles) {
-                if (appUser.roles.includes('ADMIN')) {
-                    this.isAdmin = true;
-                }
+                if (appUser.roles.includes('ADMIN')) this.isAdmin = true;
             }
-
             this.loadData();
+            
+            // 🌟 ตั้งเวลา Auto-Refresh ดึงข้อมูลทุก 30 วินาทีแบบเงียบๆ (Real-time Feel)
+            this.refreshInterval = setInterval(() => {
+                if(this.activeTab === 'dashboard' || this.activeTab === 'picklist') {
+                    this.loadData(true); // true = silent (ไม่ขึ้นไอคอนหมุนบังจอ)
+                }
+            }, 30000);
+        },
+        unmounted() {
+            if(this.refreshInterval) clearInterval(this.refreshInterval);
         },
         methods: {
-            getProductUnit(id) {
-                const p = this.products.find(p => p.id === id);
-                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
+            // Helpers
+            getTodayStr() {
+                return new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
             },
-            getProductUnitByName(name) {
-                const baseName = name.replace(' [ยกเลิก]', '');
-                const p = this.products.find(p => p.name === baseName);
-                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
-            },
+            getProductUnit(id) { const p = this.products.find(p => p.id === id); return p ? (p.unit || 'ชิ้น') : 'ชิ้น'; },
+            getProductUnitByName(name) { const p = this.products.find(p => p.name === name.replace(' [ยกเลิก]', '')); return p ? (p.unit || 'ชิ้น') : 'ชิ้น'; },
             showAlert(title, message, isError = true) { this.messageBox = { show: true, title, message, isError }; },
-            showConfirmUI(title, message, btnClass, iconClass, actionFn, payload) {
-                this.confirmDialog = { show: true, title, message, btnClass, iconClass, action: actionFn, payload };
-            },
-            async executeConfirmDialog() {
-                if(this.confirmDialog.action) await this.confirmDialog.action(this.confirmDialog.payload);
-                this.confirmDialog.show = false;
-            },
-            triggerToast(msg) {
-                this.toastMessage = msg; this.showToast = true;
-                setTimeout(() => { this.showToast = false; }, 3000);
-            },
-
-            formatDisplayDate(val) {
-                if (!val) return '';
-                if (String(val).includes('/')) return val;
-                try {
-                    const d = new Date(val);
-                    if (isNaN(d.getTime())) return val;
-                    return d.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
-                } catch (e) { return val; }
-            },
-            formatDisplayTime(val) {
-                if (!val) return '';
-                if (String(val).includes(':') && String(val).length <= 8) return val;
-                try {
-                    const d = new Date(val);
-                    if (isNaN(d.getTime())) return val;
-                    return d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-                } catch (e) { return val; }
-            },
-            formatDate(dateString) {
-                if (!dateString) return '';
-                try {
-                    const date = new Date(dateString);
-                    if (isNaN(date.getTime())) return dateString; 
-                    return date.toLocaleString('en-GB', { 
-                        timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit',
-                        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-                    }).replace(', ', ' - ');
-                } catch (e) { return dateString; }
-            },
+            showConfirmUI(title, message, btnClass, iconClass, actionFn, payload) { this.confirmDialog = { show: true, title, message, btnClass, iconClass, action: actionFn, payload }; },
+            async executeConfirmDialog() { if(this.confirmDialog.action) await this.confirmDialog.action(this.confirmDialog.payload); this.confirmDialog.show = false; },
+            triggerToast(msg) { this.toastMessage = msg; this.showToast = true; setTimeout(() => { this.showToast = false; }, 3000); },
+            formatDisplayDate(val) { if (!val) return ''; if (String(val).includes('/')) return val; try { const d = new Date(val); return isNaN(d.getTime()) ? val : d.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' }); } catch (e) { return val; } },
+            formatDisplayTime(val) { if (!val) return ''; if (String(val).includes(':') && String(val).length <= 8) return val; try { const d = new Date(val); return isNaN(d.getTime()) ? val : d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); } catch (e) { return val; } },
+            formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString); return isNaN(date.getTime()) ? dateString : date.toLocaleString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(', ', ' - '); } catch (e) { return dateString; } },
             
             exportHistoryToCSV() {
                 if(this.history.length === 0) { this.showAlert('แจ้งเตือน', 'ไม่มีข้อมูลประวัติ', false); return; }
                 let csvContent = "data:text/csv;charset=utf-8,\uFEFFวันที่,เวลา,ประเภท,ชื่อสินค้า,จำนวน,ผู้ทำรายการ\n";
                 this.history.forEach(row => {
-                    const typeLabel = row.type === 'in' ? 'รับเข้า' : 'เบิกออก';
+                    let typeLabel = row.type === 'in' ? 'รับเข้า' : row.type === 'out' ? 'เบิกออก' : 'ปรับสต็อก';
                     const safeName = `"${row.productName.replace(/"/g, '""')}"`;
                     let fDate = row.time ? this.formatDisplayDate(row.date) : this.formatDate(row.date).split(' - ')[0] || '';
                     let fTime = row.time ? this.formatDisplayTime(row.time) : this.formatDate(row.date).split(' - ')[1] || '';
                     csvContent += `${fDate},${fTime},${typeLabel},${safeName},${row.qty},${row.user}\n`;
                 });
-                const link = document.createElement("a");
-                link.setAttribute("href", encodeURI(csvContent));
-                link.setAttribute("download", `W5_History_${new Date().toISOString().split('T')[0]}.csv`);
-                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `W5_History_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
             },
 
             handleSearchInput() { this.showDropdown = true; this.form.productId = ''; },
             selectTransactionProduct(product) { this.form.productId = product.id; this.searchTransaction = product.name; this.showDropdown = false; },
             clearSelection() { this.form.productId = ''; this.searchTransaction = ''; this.showDropdown = true; },
-            quickWithdraw(product) {
-                this.activeTab = 'transaction'; 
-                setTimeout(() => { this.form.type = 'out'; this.form.productId = product.id; this.searchTransaction = product.name; window.scrollTo({ top: 0, behavior: 'smooth' }); }, 50);
-            },
+            quickWithdraw(product) { this.activeTab = 'transaction'; setTimeout(() => { this.form.type = 'out'; this.form.productId = product.id; this.searchTransaction = product.name; window.scrollTo({ top: 0, behavior: 'smooth' }); }, 50); },
             
-            async loadData() {
+            async loadData(silent = false) {
                 if (!this.isOnline) return;
-                this.isLoading = true;
+                this.isSilentLoading = silent;
+                if (!silent) this.isLoading = true;
                 try {
                     const response = await fetch(WEB_APP_URL + '?action=getData');
                     const data = await response.json();
                     if (data.products) this.products = data.products.sort((a,b) => a.name.localeCompare(b.name, 'th'));
                     if (data.history) this.history = data.history;
-                    if (data.pickList) this.pickList = data.pickList; // โหลดรายการใบจัด
+                    if (data.pickList) this.pickList = data.pickList; 
                 } catch (error) {
-                    this.showAlert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลจากระบบได้ โปรดลองรีเฟรชหน้าเว็บ', true);
+                    if(!silent) this.showAlert('ข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลจากระบบได้', true);
                 } finally {
                     this.isLoading = false;
+                    this.isSilentLoading = false;
                 }
             },
             async apiCall(payload) {
                 if (!this.isOnline) return true;
-                this.isLoading = true;
+                this.isLoading = true; this.isSilentLoading = false;
                 try {
                     const response = await fetch(WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
                     return (await response.json()).success;
@@ -713,13 +688,12 @@
                 } finally { this.isLoading = false; }
             },
 
-            // -------- ส่วนของการทำรายการด่วน --------
+            // -------- รายการด่วน --------
             verifyTransaction() {
                 if (this.isSubmitting) return;
                 if (!this.form.productId) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาเลือกสินค้าจากรายการ'); return; }
                 if (!this.form.qty || this.form.qty <= 0) { this.showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุจำนวนชิ้นให้ถูกต้อง'); return; }
                 if (!this.form.user.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'ระบบไม่พบชื่อผู้ทำรายการ'); return; }
-                
                 const product = this.products.find(p => p.id === this.form.productId);
                 if (this.form.type === 'out' && product.stock < this.form.qty) {
                     this.showAlert('สต็อกไม่พอ!', `ยอดคงเหลือของ ${product.name} มีเพียง ${product.stock} ${product.unit || 'ชิ้น'} ไม่พอสำหรับการเบิก`); return;
@@ -731,9 +705,8 @@
                 this.isSubmitting = true;
                 const product = this.products.find(p => p.id === this.form.productId);
                 const qty = parseInt(this.form.qty);
-                const now = new Date();
-                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
-                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                const uiDate = this.getTodayStr();
+                const uiTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                 
                 const success = await this.apiCall({ action: 'transaction', productId: product.id, productName: product.name, type: this.form.type, qty: qty, user: this.form.user.trim() });
                 if (success) {
@@ -746,121 +719,61 @@
                 this.isSubmitting = false;
             },
 
-            // -------- ส่วนของใบจัด (Pick List) --------
+            // -------- ใบจัด (Pick List) --------
             verifyAddPickList() {
                 if (!this.form.productId) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาเลือกสินค้าจากรายการ'); return; }
                 if (!this.form.qty || this.form.qty <= 0) { this.showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุจำนวนชิ้นให้ถูกต้อง'); return; }
                 const product = this.products.find(p => p.id === this.form.productId);
-                
-                // ตรวจสอบสต็อกคร่าวๆ แจ้งเตือนแต่ยอมให้คีย์ลงใบจัดได้
                 if (product.stock < this.form.qty) {
-                    this.showConfirmUI(
-                        'แจ้งเตือน: สต็อกอาจไม่พอ', 
-                        `สินค้า ${product.name} มีคงเหลือ ${product.stock} ${product.unit || 'ชิ้น'}\nซึ่งน้อยกว่าที่คุณกำลังสั่งเบิก (${this.form.qty} ${product.unit || 'ชิ้น'})\n\nต้องการเพิ่มลงใบจัดต่อไปหรือไม่?`,
-                        'bg-orange-500 hover:bg-orange-600', 'fas fa-exclamation-circle text-orange-500',
-                        this.processAddPickList, product
-                    );
-                } else {
-                    this.processAddPickList(product);
-                }
+                    this.showConfirmUI('แจ้งเตือน: สต็อกอาจไม่พอ', `สินค้า ${product.name} มีคงเหลือ ${product.stock} ${product.unit || 'ชิ้น'}\nซึ่งน้อยกว่าที่คุณกำลังสั่งเบิก\n\nต้องการเพิ่มลงใบจัดต่อไปหรือไม่?`, 'bg-orange-500 hover:bg-orange-600', 'fas fa-exclamation-circle text-orange-500', this.processAddPickList, product);
+                } else { this.processAddPickList(product); }
             },
             async processAddPickList(product) {
                 this.isSubmitting = true;
                 const pickId = new Date().getTime().toString();
-                const now = new Date();
-                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
-                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
-                const timeStr = `${uiDate} ${uiTime}`;
-                
-                const newItem = {
-                    pickId: pickId, productId: product.id, productName: product.name, 
-                    qty: this.form.qty, requestedBy: this.loggedInUser, timeStr: timeStr
-                };
+                const uiDate = this.getTodayStr();
+                const uiTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', hour12: false });
+                const newItem = { pickId: pickId, productId: product.id, productName: product.name, qty: this.form.qty, requestedBy: this.loggedInUser, timeStr: `${uiDate} ${uiTime}` };
 
                 const success = await this.apiCall({ action: 'addPickList', ...newItem });
                 if(success) {
                     this.pickList.push(newItem);
                     if (window.sendAppLog) window.sendAppLog('สร้างใบจัด W5', `รอเบิก ${product.name} จำนวน ${newItem.qty} ${product.unit || 'ชิ้น'}`);
                     this.triggerToast('เพิ่มลงใบจัดเรียบร้อยแล้ว');
-                    this.form.productId = ''; this.form.qty = null; this.searchTransaction = '';
-                    this.activeTab = 'picklist';
+                    this.form.productId = ''; this.form.qty = null; this.searchTransaction = ''; this.activeTab = 'picklist';
                 }
                 this.isSubmitting = false;
             },
-            openPickModal(item) {
-                // เซ็ตค่าเริ่มต้นจำนวนที่จะหยิบ เท่ากับจำนวนที่ขอมา
-                this.pickModal = { show: true, item: item, actualQty: item.qty };
-            },
+            openPickModal(item) { this.pickModal = { show: true, item: item, actualQty: item.qty }; },
             async submitPick() {
-                if(!this.pickModal.actualQty || this.pickModal.actualQty <= 0) {
-                    this.showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุจำนวนที่หยิบได้จริงให้ถูกต้อง'); return;
-                }
-                
+                if(!this.pickModal.actualQty || this.pickModal.actualQty <= 0) { this.showAlert('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุจำนวนที่หยิบได้จริงให้ถูกต้อง'); return; }
                 this.isSubmitting = true;
-                const item = this.pickModal.item;
-                const product = this.products.find(p => p.id === item.productId);
-                
-                const now = new Date();
-                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
-                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                const item = this.pickModal.item; const product = this.products.find(p => p.id === item.productId);
+                const uiDate = this.getTodayStr(); const uiTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
-                const success = await this.apiCall({
-                    action: 'processPickList', pickId: item.pickId, productId: item.productId, 
-                    productName: item.productName, actualQty: this.pickModal.actualQty, pickerUser: this.loggedInUser
-                });
-
+                const success = await this.apiCall({ action: 'processPickList', pickId: item.pickId, productId: item.productId, productName: item.productName, actualQty: this.pickModal.actualQty, pickerUser: this.loggedInUser });
                 if(success) {
-                    // ตัดสต็อกในหน้าเว็บ
                     if(product) product.stock -= this.pickModal.actualQty;
-                    // ลบออกจากคิวใบจัด
                     this.pickList = this.pickList.filter(p => p.pickId !== item.pickId);
-                    // ลงประวัติการเบิกออก
                     this.history.push({ date: uiDate, time: uiTime, type: 'out', productName: item.productName, qty: this.pickModal.actualQty, user: this.loggedInUser });
-                    
                     if (window.sendAppLog) window.sendAppLog('หยิบสินค้าตามใบจัด W5', `เบิก ${item.productName} ออก ${this.pickModal.actualQty} ${product ? product.unit || 'ชิ้น' : 'ชิ้น'}`);
-                    
-                    this.triggerToast('หยิบสินค้าและตัดสต็อกเรียบร้อย');
-                    this.pickModal.show = false;
+                    this.triggerToast('หยิบสินค้าและตัดสต็อกเรียบร้อย'); this.pickModal.show = false;
                 }
                 this.isSubmitting = false;
             },
-            confirmRemovePickList(item) {
-                this.showConfirmUI(
-                    'ยืนยันลบใบจัด', 
-                    `ต้องการลบรายการขอเบิกสินค้านี้ใช่หรือไม่?\n\n"${item.productName}"\nจำนวน ${item.qty} ${this.getProductUnitByName(item.productName)}`,
-                    'bg-red-600 hover:bg-red-700', 'fas fa-trash text-red-500',
-                    this.processRemovePickList, item
-                );
-            },
+            confirmRemovePickList(item) { this.showConfirmUI('ยืนยันลบใบจัด', `ต้องการลบรายการขอเบิกสินค้านี้ใช่หรือไม่?\n\n"${item.productName}"\nจำนวน ${item.qty} ${this.getProductUnitByName(item.productName)}`, 'bg-red-600 hover:bg-red-700', 'fas fa-trash text-red-500', this.processRemovePickList, item); },
             async processRemovePickList(item) {
-                this.isSubmitting = true;
-                const success = await this.apiCall({ action: 'removePickList', pickId: item.pickId });
-                if(success) {
-                    this.pickList = this.pickList.filter(p => p.pickId !== item.pickId);
-                    if (window.sendAppLog) window.sendAppLog('ยกเลิกใบจัด W5', `ยกเลิกการรอเบิก ${item.productName}`);
-                    this.triggerToast('ลบรายการใบจัดสำเร็จ');
-                }
+                this.isSubmitting = true; const success = await this.apiCall({ action: 'removePickList', pickId: item.pickId });
+                if(success) { this.pickList = this.pickList.filter(p => p.pickId !== item.pickId); if (window.sendAppLog) window.sendAppLog('ยกเลิกใบจัด W5', `ยกเลิกการรอเบิก ${item.productName}`); this.triggerToast('ลบรายการใบจัดสำเร็จ'); }
                 this.isSubmitting = false;
             },
 
             // -------- จัดการอื่นๆ --------
-            confirmUndo(log) {
-                this.showConfirmUI(
-                    'ยืนยันการยกเลิกรายการ', 
-                    `ต้องการยกเลิกรายการนี้ใช่หรือไม่?\n\n"${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} ${log.productName} \nจำนวน ${log.qty} ${this.getProductUnitByName(log.productName)}"\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`,
-                    'bg-red-600 hover:bg-red-700', 'fas fa-exclamation-triangle text-red-500', 
-                    this.processUndo, log
-                );
-            },
+            confirmUndo(log) { this.showConfirmUI('ยืนยันการยกเลิกรายการ', `ต้องการยกเลิกรายการนี้ใช่หรือไม่?\n\n"${log.type === 'in' ? 'รับเข้า' : 'เบิกออก'} ${log.productName} \nจำนวน ${log.qty} ${this.getProductUnitByName(log.productName)}"\n\n(ระบบจะทำการปรับคืนยอดสต็อกให้อัตโนมัติ)`, 'bg-red-600 hover:bg-red-700', 'fas fa-exclamation-triangle text-red-500', this.processUndo, log); },
             async processUndo(log) {
-                this.isSubmitting = true;
-                let baseProductName = log.productName.replace(' [ยกเลิก]', ''); 
-                const product = this.products.find(p => p.name === baseProductName);
+                this.isSubmitting = true; const product = this.products.find(p => p.name === log.productName.replace(' [ยกเลิก]', ''));
                 if (!product) { this.showAlert('ข้อผิดพลาด', 'ไม่พบข้อมูลสินค้านี้ในระบบแล้ว', true); this.isSubmitting = false; return; }
-                const reverseType = log.type === 'in' ? 'out' : 'in';
-                const now = new Date();
-                const uiDate = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: '2-digit' });
-                const uiTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                const reverseType = log.type === 'in' ? 'out' : 'in'; const uiDate = this.getTodayStr(); const uiTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                 const success = await this.apiCall({ action: 'transaction', productId: product.id, productName: product.name + ' [ยกเลิก]', type: reverseType, qty: log.qty, user: this.loggedInUser });
                 if (success) {
                     if (reverseType === 'in') product.stock += log.qty; else product.stock -= log.qty;
@@ -870,53 +783,58 @@
                 }
                 this.isSubmitting = false;
             },
-
-            getSelectedProductName() {
-                if(!this.form.productId) return '';
-                return this.products.find(p => p.id === this.form.productId).name;
+            getSelectedProductName() { return this.form.productId ? this.products.find(p => p.id === this.form.productId).name : ''; },
+            getSelectedProductUnit() { const p = this.products.find(p => p.id === this.form.productId); return p ? (p.unit || 'ชิ้น') : 'ชิ้น'; },
+            
+            // --- 🌟 ปรับแก้สต็อก (Admin) ---
+            openAdjustModal(product) {
+                this.adjustModal = { show: true, id: product.id, name: product.name, oldStock: product.stock, newStock: product.stock, unit: product.unit || 'ชิ้น' };
             },
-            getSelectedProductUnit() {
-                if(!this.form.productId) return 'ชิ้น';
-                const p = this.products.find(p => p.id === this.form.productId);
-                return p ? (p.unit || 'ชิ้น') : 'ชิ้น';
-            },
-            async addProduct() {
-                if(!this.newProductName.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อสินค้าที่ต้องการเพิ่ม'); return; }
-                const newId = this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) + 1 : 1;
-                const newProduct = { id: newId, name: this.newProductName.trim(), stock: 0, unit: this.newProductUnit.trim() || 'ชิ้น' };
-                const success = await this.apiCall({ action: 'addProduct', product: newProduct });
-                if (success) {
-                    this.products.unshift(newProduct);
-                    if (window.sendAppLog) window.sendAppLog('เพิ่มสินค้าใหม่', `เพิ่ม ${this.newProductName.trim()} เข้าคลัง W5`);
-                    this.newProductName = ''; this.newProductUnit = 'ชิ้น'; this.triggerToast('เพิ่มสินค้าใหม่เรียบร้อย');
-                }
-            },
-            openEditModal(product) { this.editModal = { show: true, id: product.id, oldName: product.name, newName: product.name }; },
-            async saveEditProduct() {
-                if (!this.editModal.newName.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'ชื่อสินค้าต้องไม่เป็นค่าว่าง'); return; }
-                if (this.editModal.newName === this.editModal.oldName) { this.editModal.show = false; return; }
+            async saveAdjustStock() {
+                if (this.adjustModal.newStock === this.adjustModal.oldStock) { this.adjustModal.show = false; return; }
+                if (this.adjustModal.newStock < 0) { this.showAlert('ข้อมูลไม่ถูกต้อง', 'จำนวนสต็อกไม่สามารถติดลบได้'); return; }
+                
                 this.isSubmitting = true;
-                const success = await this.apiCall({ action: 'editProduct', productId: this.editModal.id, newName: this.editModal.newName.trim() });
+                const success = await this.apiCall({
+                    action: 'adjustStock', productId: this.adjustModal.id, productName: this.adjustModal.name, newStock: this.adjustModal.newStock, user: this.loggedInUser
+                });
+                
                 if (success) {
-                    const product = this.products.find(p => p.id === this.editModal.id);
-                    if (product) product.name = this.editModal.newName.trim();
-                    if (window.sendAppLog) window.sendAppLog('แก้ไขชื่อสินค้า', `เปลี่ยนจาก ${this.editModal.oldName} เป็น ${this.editModal.newName}`);
-                    this.triggerToast('อัปเดตชื่อสินค้าสำเร็จ'); this.editModal.show = false;
+                    const product = this.products.find(p => p.id === this.adjustModal.id);
+                    if(product) product.stock = this.adjustModal.newStock;
+                    
+                    const uiDate = this.getTodayStr();
+                    const uiTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                    const diff = Math.abs(this.adjustModal.newStock - this.adjustModal.oldStock);
+                    
+                    this.history.push({ date: uiDate, time: uiTime, type: 'adjust', productName: `${this.adjustModal.name} [ปรับสต็อก ${this.adjustModal.oldStock} -> ${this.adjustModal.newStock}]`, qty: diff, user: this.loggedInUser });
+                    
+                    if (window.sendAppLog) window.sendAppLog('แก้ไขสต็อกสินค้า', `${this.adjustModal.name} เป็น ${this.adjustModal.newStock}`);
+                    this.triggerToast('อัปเดตสต็อกเรียบร้อย');
+                    this.adjustModal.show = false;
                 }
                 this.isSubmitting = false;
             },
-            confirmDelete(product) {
-                this.showConfirmUI('ยืนยันลบสินค้า', `คุณแน่ใจหรือไม่ที่จะลบสินค้าต่อไปนี้?\n\n"${product.name}"`, 'bg-red-600 hover:bg-red-700', 'fas fa-trash-alt text-red-500', this.processDelete, product.id);
+
+            async addProduct() {
+                if(!this.newProductName.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'กรุณาระบุชื่อสินค้า'); return; }
+                const newId = this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) + 1 : 1;
+                const newProduct = { id: newId, name: this.newProductName.trim(), stock: 0, unit: this.newProductUnit.trim() || 'ชิ้น' };
+                const success = await this.apiCall({ action: 'addProduct', product: newProduct });
+                if (success) { this.products.unshift(newProduct); if (window.sendAppLog) window.sendAppLog('เพิ่มสินค้า', `เพิ่ม ${this.newProductName.trim()} W5`); this.newProductName = ''; this.triggerToast('เพิ่มสินค้าเรียบร้อย'); }
             },
+            openEditModal(product) { this.editModal = { show: true, id: product.id, oldName: product.name, newName: product.name }; },
+            async saveEditProduct() {
+                if (!this.editModal.newName.trim()) { this.showAlert('ข้อมูลไม่ครบ', 'ชื่อว่างเปล่า'); return; }
+                if (this.editModal.newName === this.editModal.oldName) { this.editModal.show = false; return; }
+                this.isSubmitting = true; const success = await this.apiCall({ action: 'editProduct', productId: this.editModal.id, newName: this.editModal.newName.trim() });
+                if (success) { const product = this.products.find(p => p.id === this.editModal.id); if (product) product.name = this.editModal.newName.trim(); if (window.sendAppLog) window.sendAppLog('แก้ชื่อสินค้า', `${this.editModal.oldName} เป็น ${this.editModal.newName}`); this.triggerToast('อัปเดตชื่อสำเร็จ'); this.editModal.show = false; }
+                this.isSubmitting = false;
+            },
+            confirmDelete(product) { this.showConfirmUI('ยืนยันลบสินค้า', `ลบ "${product.name}"?`, 'bg-red-600 hover:bg-red-700', 'fas fa-trash-alt text-red-500', this.processDelete, product.id); },
             async processDelete(id) {
-                this.isSubmitting = true;
-                const productToDelete = this.products.find(p => p.id === id);
-                const success = await this.apiCall({ action: 'deleteProduct', productId: id });
-                if (success) {
-                    this.products = this.products.filter(p => p.id !== id);
-                    if (window.sendAppLog) window.sendAppLog('ลบสินค้า', `ลบ ${productToDelete.name} ออกจากคลัง W5`);
-                    this.triggerToast('ลบสินค้าสำเร็จ');
-                }
+                this.isSubmitting = true; const productToDelete = this.products.find(p => p.id === id); const success = await this.apiCall({ action: 'deleteProduct', productId: id });
+                if (success) { this.products = this.products.filter(p => p.id !== id); if (window.sendAppLog) window.sendAppLog('ลบสินค้า', `ลบ ${productToDelete.name} W5`); this.triggerToast('ลบสำเร็จ'); }
                 this.isSubmitting = false;
             }
         }
