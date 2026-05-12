@@ -587,9 +587,9 @@
                 if (!this.searchManage) return this.products;
                 return this.products.filter(p => p.name.toLowerCase().includes(this.searchManage.toLowerCase()));
             },
-            // 🌟 คำนวณสินค้าใกล้หมด (ต่ำกว่า 10)
+            // 🌟 คำนวณสินค้าใกล้หมด (ต่ำกว่า 20)
             lowStockItems() {
-                return this.products.filter(p => p.stock < 10);
+                return this.products.filter(p => p.stock < 20);
             },
             // 🌟 นับจำนวนรายการเคลื่อนไหวเฉพาะวันนี้
             todayHistoryCount() {
