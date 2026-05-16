@@ -49,7 +49,7 @@
     let currentUser = null; 
 
     function verifyAccess() {
-        const savedData = localStorage.getItem('akra_sso_user_data');
+        const savedData = localStorage.getItem('akra_user_data');
         if (!savedData && window.self !== window.top) {
             appUser = { name: "Tester (โหมดจำลอง)", roles: ["ADMIN"] };
             currentUser = appUser.name;
@@ -66,7 +66,7 @@
             currentUser = appUser.name;
             return true;
         } catch (error) {
-            localStorage.removeItem('akra_sso_user_data'); window.location.replace(MAIN_PORTAL_URL); return false;
+            localStorage.removeItem('akra_user_data'); window.location.replace(MAIN_PORTAL_URL); return false;
         }
     }
     if(!verifyAccess()) { throw new Error("Access Denied"); }
